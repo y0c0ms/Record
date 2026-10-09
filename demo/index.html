@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Northwind Store — demo target for Record</title>
+<style>
+  :root {
+    --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --bg: #f8fafc;
+    --brand: #2563eb; --ok: #059669;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 14px 28px; display: flex; align-items: center; gap: 24px; position: sticky; top: 0; z-index: 5; }
+  .logo { font-weight: 700; letter-spacing: -.02em; font-size: 17px; }
+  nav a { color: var(--muted); text-decoration: none; margin-right: 18px; font-weight: 500; }
+  nav a:hover { color: var(--brand); }
+  .cart-pill { margin-left: auto; background: var(--ink); color: #fff; padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+  main { max-width: 940px; margin: 32px auto 80px; padding: 0 20px; }
+  h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .toolbar { display: flex; gap: 12px; margin-bottom: 20px; }
+  input, select, button { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  button { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; cursor: pointer; }
+  button.ghost { background: #fff; color: var(--ink); border-color: var(--line); }
+  input[type="search"] { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .thumb { height: 84px; border-radius: 8px; background: linear-gradient(135deg, #dbeafe, #ede9fe); display: grid; place-items: center; font-size: 30px; }
+  .name { font-weight: 600; }
+  .price { color: var(--muted); font-size: 13px; }
+  .status { margin: 26px 0 0; padding: 14px 16px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+  .status.ok { border-color: #a7f3d0; background: #ecfdf5; color: var(--ok); font-weight: 600; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 12px; }
+  .note { margin-top: 30px; color: var(--muted); font-size: 13px; }
+  code { background: #e2e8f0; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Northwind Store</div>
+  <nav>
+    <a href="#catalog">Catalog</a>
+    <a href="#support">Support</a>
+    <a href="#about">About</a>
+  </nav>
+  <div class="cart-pill" data-testid="cart-count" id="cart-count">Cart · 0</div>
+</header>
+
+<main id="catalog">
+  <h1>Catalog</h1>
+  <p class="sub">A tiny but realistic target: search, filter, add to cart, then check out.</p>
+
+  <div class="toolbar">
+    <input id="search" type="search" aria-label="Search products" placeholder="Search products…" />
+    <select id="category" aria-label="Category">
+      <option value="all">All categories</option>
+      <option value="audio">Audio</option>
+      <option value="desk">Desk</option>
+      <option value="outdoor">Outdoor</option>
+    </select>
+    <button id="apply" type="button">Apply</button>
+  </div>
+
+  <div class="grid" id="products"></div>
+  <div class="empty" id="empty" hidden>No products match your filters.</div>
+
+  <div class="status" id="order-status" hidden></div>
+
+  <div id="checkout" hidden style="margin-top:26px">
+    <h2 style="font-size:18px;margin:0 0 12px">Checkout</h2>
+    <div style="display:grid;gap:12px;max-width:420px">
+      <input id="email" type="email" aria-label="Email address" placeholder="Email address" />
+      <input id="coupon" type="text" aria-label="Coupon code" placeholder="Coupon code (optional)" />
+      <button id="place-order" type="button">Place order</button>
+    </div>
+  </div>
+
+  <p class="note">
+    Recording target served from <code>/demo</code>. Everything here uses proper ARIA roles,
+    labels and <code>data-testid</code> so recorded locators replay cleanly.
+  </p>
+</main>
+
+<script>
+  const PRODUCTS = [
+    { id: 1, name: 'Studio Headphones', price: 249, cat: 'audio', icon: '🎧' },
+    { id: 2, name: 'Desk Lamp', price: 59, cat: 'desk', icon: '💡' },
+    { id: 3, name: 'Trail Backpack', price: 129, cat: 'outdoor', icon: '🎒' },
+    { id: 4, name: 'Bluetooth Speaker', price: 89, cat: 'audio', icon: '🔊' },
+    { id: 5, name: 'Standing Mat', price: 74, cat: 'desk', icon: '🧘' },
+  ];
+  const cart = new Map();
+  const $ = (id) => document.getElementById(id);
+
+  function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const cat = $('category').value;
+    const rows = PRODUCTS.filter(
+      (p) => (!q || p.name.toLowerCase().includes(q)) && (cat === 'all' || p.cat === cat)
+    );
+    const grid = $('products');
+    grid.innerHTML = '';
+    for (const p of rows) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        `<div class="thumb">${p.icon}</div>` +
+        `<div class="name">${p.name}</div>` +
+        `<div class="price">$${p.price}</div>` +
+        `<button class="add" type="button" data-add="${p.id}" aria-label="Add ${p.name} to cart">Add to cart</button>`;
+      grid.appendChild(card);
+    }
+    $('empty').hidden = rows.length > 0;
+  }
+
+  function cartCount() {
+    let n = 0;
+    for (const v of cart.values()) n += v;
+    return n;
+  }
+
+  function syncCart() {
+    $('cart-count').textContent = `Cart · ${cartCount()}`;
+    $('checkout').hidden = cartCount() === 0;
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-add]');
+    if (!btn) return;
+    const id = Number(btn.dataset.add);
+    cart.set(id, (cart.get(id) || 0) + 1);
+    syncCart();
+  });
+
+  $('apply').addEventListener('click', render);
+  $('search').addEventListener('keydown', (e) => { if (e.key === 'Enter') render(); });
+
+  $('place-order').addEventListener('click', () => {
+    const email = $('email').value.trim();
+    const box = $('order-status');
+    box.hidden = false;
+    if (!email) {
+      box.className = 'status';
+      box.textContent = 'Enter an email address to place the order.';
+      return;
+    }
+    box.className = 'status ok';
+    box.textContent = `Order confirmed for ${email} · ${cartCount()} item(s). Thanks!`;
+  });
+
+  render();
+  syncCart();
+</script>
+</body>
+</html>

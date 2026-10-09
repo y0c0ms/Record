@@ -1,0 +1,16 @@
+[package]
+name = "record-gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.22"
+eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Only the file picker is used. The `common-controls-v6` feature links
+# TaskDialogIndirect, which needs a comctl32 v6 manifest this exe does not
+# embed — with it the program failed to start (0xC0000139, entry point not found).
+rfd = { version = "0.17", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+ureq = "2"

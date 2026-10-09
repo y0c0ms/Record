@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inner frame</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 12px; }
+      button { display: block; margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <p>Inside the frame</p>
+    <button id="frame-button">Frame button</button>
+    <div id="framelog">nothing clicked yet</div>
+    <script>
+      document.getElementById('frame-button').addEventListener('click', () => {
+        document.getElementById('framelog').textContent = 'clicked: frame button';
+        // Tell the parent too, so the outer page can report it.
+        parent.postMessage('frame button', '*');
+      });
+    </script>
+  </body>
+</html>

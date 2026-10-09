@@ -1,0 +1,27 @@
+[package]
+name = "record-slint"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# The software renderer: measured idle at 0% CPU and 33 MB on this machine,
+# against 0.16-0.26% / 86 MB for the GL renderer (femtovg) — a desk tool that
+# sits open all day should cost nothing while nobody touches it. Accessibility
+# (AccessKit) is kept: it is how screen readers and the test harness read the UI.
+slint = { version = "1.18", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-software",
+    "accessibility",
+    "compat-1-2",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+base64 = "0.22"
+rfd = { version = "0.17", default-features = false }
+
+[build-dependencies]
+slint-build = "1.18"
+winresource = "0.1"

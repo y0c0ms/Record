@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Record — Record once in Edge, replay every build</title>
+<meta name="description" content="Record real user flows in Microsoft Edge, see them as discrete steps, replay them step by step, and export a Playwright test." />
+<link rel="stylesheet" href="/web/styles.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Record</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#demo">Live demo</a>
+      <a href="#options">Compare options</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-cta">
+      <span class="pill pill-edge" title="Records using your installed Microsoft Edge">
+        <span class="dot" aria-hidden="true"></span> Microsoft Edge
+      </span>
+      <a class="btn btn-primary" href="#demo">Try the demo</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ─────────────────────────── hero ─────────────────────────── -->
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="eyebrow">Playwright · record &amp; replay · POC</p>
+      <h1>Record what you do in Edge.<br /><span class="grad">Replay it step by step.</span></h1>
+      <p class="lede">
+        Record is a small native desktop app that drives <strong>Microsoft Edge</strong> through
+        Playwright. Press record, use the browser normally, press stop — and every click, keystroke
+        and navigation shows up as a discrete, inspectable step. Replay re-runs those steps in order,
+        screenshot by screenshot, and exports a plain <code>@playwright/test</code> spec you own.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="#demo">Run the live demo</a>
+        <a class="btn btn-ghost btn-lg" href="#options">See what already exists</a>
+      </div>
+      <ul class="hero-points">
+        <li><strong>Real Edge</strong> — uses your installed browser via <code>channel: msedge</code>, no bundled download</li>
+        <li><strong>Resilient locators</strong> — prefers role, text and <code>data-testid</code>, like Playwright's own generator</li>
+        <li><strong>Yours to keep</strong> — export a runnable spec, no vendor lock-in, no server component</li>
+      </ul>
+    </div>
+
+    <div class="hero-visual" aria-hidden="true">
+      <div class="mock-window">
+        <div class="mock-bar"><i></i><i></i><i></i><span>Microsoft Edge — record-gui</span></div>
+        <div class="mock-body">
+          <div class="mock-panel">
+            <div class="mock-row mock-title"><span class="rec"></span> Recording — Northwind Store</div>
+            <ol class="mock-steps">
+              <li class="ok"><b>1</b> Open localhost/demo</li>
+              <li class="ok"><b>2</b> Type in <em>Search products</em></li>
+              <li class="ok"><b>3</b> Select option in <em>Category</em></li>
+              <li class="ok"><b>4</b> Click <em>Add Studio Headphones to cart</em></li>
+              <li class="run"><b>5</b> Click <em>Place order</em></li>
+            </ol>
+            <div class="mock-progress"><span style="width:78%"></span></div>
+          </div>
+          <div class="mock-shot"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────── how it works ─────────────────────── -->
+  <section class="section" id="how">
+    <div class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2>Four steps, no instrumentation required</h2>
+      <p class="section-lede">
+        Record works at the browser automation layer, so there is nothing to add to the app under
+        test. It works on any site you can reach, including the local demo on this page.
+      </p>
+    </div>
+
+    <div class="cards-4">
+      <article class="card">
+        <div class="card-num">1</div>
+        <h3>Hit record</h3>
+        <p>A real Edge window opens. A small recorder script is injected into every page; the app itself is untouched.</p>
+      </article>
+      <article class="card">
+        <div class="card-num">2</div>
+        <h3>Use the browser</h3>
+        <p>Click, type, select, navigate. Each action is captured with a locator chosen by Playwright's priority rules.</p>
+      </article>
+      <article class="card">
+        <div class="card-num">3</div>
+        <h3>Hit stop</h3>
+        <p>The step list is final. Each step has a plain-English title, the locator used, and a JSON form.</p>
+      </article>
+      <article class="card">
+        <div class="card-num">4</div>
+        <h3>Replay or export</h3>
+        <p>Replay runs the steps one at a time with per-step screenshots, or export a spec for <code>npx playwright test</code>.</p>
+      </article>
+    </div>
+
+    <div class="arch">
+      <div class="arch-node"><b>Rust GUI</b><span>egui · Start / Stop / steps</span></div>
+      <div class="arch-link" aria-hidden="true">⇄</div>
+      <div class="arch-node"><b>Node sidecar</b><span>HTTP + SSE, session store</span></div>
+      <div class="arch-link" aria-hidden="true">⇄</div>
+      <div class="arch-node"><b>Playwright</b><span>Drives Microsoft Edge</span></div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── live demo ─────────────────────── -->
+  <section class="section section-alt" id="demo">
+    <div class="section-head">
+      <p class="eyebrow">Live demo</p>
+      <h2>Record it right here</h2>
+      <p class="section-lede">
+        The panel below talks to the same sidecar the desktop app uses. Pressing
+        <em>Record</em> opens a real Edge window pointed at the local demo store. Drive it, press
+        <em>Stop</em>, then <em>Replay</em> to watch the steps run back.
+      </p>
+    </div>
+
+    <div class="demo-grid">
+      <!-- control card -->
+      <div class="demo-card">
+        <div class="demo-card-head">
+          <span class="pill" id="statusPill">Idle</span>
+          <span class="mono dim" id="sessionId">no session</span>
+        </div>
+
+        <label class="field">
+          <span>Flow name</span>
+          <input id="flowName" type="text" value="Checkout happy path" data-record-ignore />
+        </label>
+
+        <div class="btn-row">
+          <button class="btn btn-record" id="btnRecord">
+            <span class="rec" aria-hidden="true"></span> Record
+          </button>
+          <button class="btn btn-ghost" id="btnStop" disabled>Stop</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnReplay" disabled>Replay steps</button>
+          <button class="btn btn-ghost" id="btnExport" disabled>Export spec</button>
+        </div>
+
+        <div class="demo-targets">
+          <h4>Demo target</h4>
+          <p class="dim small">A tiny store with search, filter, cart and checkout — reachable at</p>
+          <a class="code-link mono" id="demoUrl" href="/demo" target="_blank" rel="noreferrer">/demo</a>
+        </div>
+
+        <div class="replay-summary" id="replaySummary" hidden>
+          <div class="rs-row"><span>Result</span><b id="rsResult">—</b></div>
+          <div class="rs-row"><span>Steps</span><b id="rsSteps">0</b></div>
+          <div class="rs-row"><span>Passed</span><b id="rsPassed">0</b></div>
+          <div class="rs-row"><span>Failed</span><b id="rsFailed">0</b></div>
+        </div>
+      </div>
+
+      <!-- steps card -->
+      <div class="demo-card demo-steps-card">
+        <div class="demo-card-head">
+          <h3>Steps</h3>
+          <span class="mono dim" id="stepCount">0 steps</span>
+        </div>
+        <ol class="steps" id="steps">
+          <li class="steps-empty">No steps yet — press <em>Record</em> and use the Edge window.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- generated code -->
+    <div class="demo-card code-card">
+      <div class="demo-card-head">
+        <h3>Generated Playwright test</h3>
+        <button class="btn btn-ghost btn-sm" id="btnCopy" disabled>Copy</button>
+      </div>
+      <pre class="code" id="code"><code class="dim">// Export the recording to see the generated spec here.</code></pre>
+    </div>
+  </section>
+
+  <!-- ────────────────────────── options ─────────────────────── -->
+  <section class="section" id="options">
+    <div class="section-head">
+      <p class="eyebrow">Landscape</p>
+      <h2>What already exists — and where Record fits</h2>
+      <p class="section-lede">
+        Record is deliberately small. These are the established tools worth knowing, and the honest
+        reason a POC like this still has a place.
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table class="opts">
+        <thead>
+          <tr>
+            <th>Option</th><th>Shape</th><th>Records in</th><th>Outputs</th><th>Desktop step list</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="hl">
+            <td><b>Record</b> <span class="tag">this POC</span></td>
+            <td>Native GUI + sidecar</td>
+            <td>Microsoft Edge (and any Playwright channel)</td>
+            <td>Step list, replay, Playwright spec</td>
+            <td><span class="yes">Yes</span></td>
+            <td>No SAAS, no vendor, Edge-first, spec is the deliverable.</td>
+          </tr>
+          <tr>
+            <td><b>Playwright codegen</b></td>
+            <td>CLI / VS Code ext</td>
+            <td>Any Playwright browser or channel</td>
+            <td>Playwright test source</td>
+            <td><span class="no">No</span></td>
+            <td>The reference implementation. Generates code, not a reviewable step list; <code>--save-storage</code> keeps logins.</td>
+          </tr>
+          <tr>
+            <td><b>Chrome DevTools Recorder</b></td>
+            <td>Built into DevTools</td>
+            <td>Chrome / Chromium only</td>
+            <td>JSON flow, then Puppeteer, Selenium, Lighthouse…</td>
+            <td><span class="partial">Panel</span></td>
+            <td>Great UX with an editable step panel, but Chromium-only and no Edge.</td>
+          </tr>
+          <tr>
+            <td><b>Selenium IDE</b></td>
+            <td>Browser extension + IDE</td>
+            <td>Any Selenium-supported browser</td>
+            <td>Selenide / TestCafe / Playwright export</td>
+            <td><span class="yes">Yes</span></td>
+            <td>Longest-running recorder; Flow Mode exports to Playwright.</td>
+          </tr>
+          <tr>
+            <td><b>Playwright MCP</b></td>
+            <td>Model Context Protocol server</td>
+            <td>Any Playwright browser or channel</td>
+            <td>Live browser control for an AI agent</td>
+            <td><span class="no">No</span></td>
+            <td>Not a recorder; useful precedent for driving Edge over a local protocol.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cards-3 tight">
+      <article class="card card-plain">
+        <h3>Why not just codegen?</h3>
+        <p>Because a code file is not a review artifact. The step list is what a QA or business reviewer can read and sign off before anything runs.</p>
+      </article>
+      <article class="card card-plain">
+        <h3>Why Edge specifically?</h3>
+        <p>Enterprise users live in Edge, behind corporate proxies and policies. Driving the installed browser means zero download and real-world fidelity.</p>
+      </article>
+      <article class="card card-plain">
+        <h3>What this POC proves</h3>
+        <p>The whole loop — capture, discrete steps, replay, export — is implementable in a small codebase with no proprietary engine.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────── faq ────────────────────────── -->
+  <section class="section section-alt" id="faq">
+    <div class="section-head">
+      <p class="eyebrow">FAQ</p>
+      <h2>Straight answers</h2>
+    </div>
+    <div class="faq">
+      <details open>
+        <summary>Does it need a browser download?</summary>
+        <p>No. Playwright launches your installed Microsoft Edge through <code>channel: 'msedge'</code>. If Edge is missing, start the sidecar and it will say so.</p>
+      </details>
+      <details>
+        <summary>Are recorded flows stable?</summary>
+        <p>Locators follow Playwright's priority: <code>data-testid</code>, then role plus accessible name, then label, then text, then a CSS path. Adding test ids to the app under test makes flows near-unbreakable.</p>
+      </details>
+      <details>
+        <summary>What happens to secrets?</summary>
+        <p>Values typed into password fields are masked in the step list and in the exported spec.</p>
+      </details>
+      <details>
+        <summary>Where do recordings live?</summary>
+        <p>On disk, as JSON per session under <code>data/sessions</code>, with generated specs under <code>generated/</code>. Nothing is uploaded.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="cta-final">
+    <h2>Record once in Edge. Replay everywhere.</h2>
+    <p>Press <em>Record</em> above and drive the demo store — the steps appear here as you go.</p>
+    <a class="btn btn-primary btn-lg" href="#demo">Start the live demo</a>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="brand small">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Record</span>
+    </div>
+    <p class="dim small">Proof of concept. Drives Microsoft Edge via Playwright.</p>
+  </div>
+</footer>
+
+<script src="/web/app.js"></script>
+</body>
+</html>

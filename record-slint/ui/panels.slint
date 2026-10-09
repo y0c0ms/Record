@@ -1,0 +1,589 @@
+// The right-hand panels (a step's detail, a run's detail) and the other
+// main views: Code, Runs, Dataset.
+
+import { Theme, Btn, Pill, Field, Choice, Label, Hint, Divider, Dot, Empty } from "theme.slint";
+import { Line, LocatorRow, ParamRow, RunRow, RunStepRow } from "models.slint";
+import { CheckBox, ScrollView, TextEdit } from "std-widgets.slint";
+
+component Lines inherits VerticalLayout {
+    in property <[Line]> lines;
+    spacing: 2px;
+    for l in root.lines: Text {
+        text: l.text;
+        wrap: word-wrap;
+        font-size: l.mono ? 11.5px : 12px;
+        font-family: l.mono ? Theme.mono : "";
+        color: l.tone == "ok" ? Theme.ok : l.tone == "danger" ? Theme.danger
+            : l.tone == "accent" ? Theme.accent : l.tone == "dim" ? Theme.text-dim : Theme.text;
+    }
+}
+
+// A drag handle on a side panel's left edge. Dragging left widens the panel;
+// the width is held by the window so it survives the panel closing.
+component Splitter inherits Rectangle {
+    in-out property <length> panel-width;
+    in property <length> narrowest: 280px;
+    in property <length> widest: 900px;
+    property <length> start-width;
+    x: 0;
+    width: 6px;
+    accessible-role: AccessibleRole.none;
+    background: touch.has-hover || touch.pressed ? Theme.accent.with-alpha(0.5) : transparent;
+    touch := TouchArea {
+        mouse-cursor: col-resize;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.start-width = root.panel-width; }
+        }
+        moved => {
+            if (self.pressed) {
+                root.panel-width = max(root.narrowest, min(root.widest, root.start-width - (self.mouse-x - self.pressed-x)));
+            }
+        }
+    }
+}
+
+export component StepPanel inherits Rectangle {
+    in property <int> index;
+    in property <string> phrase;
+    in property <int> tab;
+    in property <bool> editable;
+    // Step tab.
+    in property <[string]> action-labels;
+    in property <int> action-index;
+    in property <bool> needs-value;
+    in property <string> value-label;
+    in property <[string]> match-labels;
+    in property <bool> matched;
+    in property <int> match-index;
+    in property <bool> optional;
+    in-out property <string> value;
+    in property <bool> is-param;
+    in-out property <string> param;
+    in property <bool> secret;
+    in property <bool> secret-stored;
+    in-out property <string> new-secret;
+    in property <bool> is-upload;
+    in property <string> file-text;
+    in property <bool> file-missing;
+    in property <string> file-sample;
+    in property <[string]> dialogs;
+    in property <string> target;
+    in property <string> scope;
+    in property <[Line]> outcome;
+    // Locators tab.
+    in property <[LocatorRow]> locators;
+    in property <bool> editing-locators;
+    in property <string> locator-summary;
+    in property <[string]> strategies;
+    // Raw tab.
+    in property <[LocatorRow]> raw;
+
+    callback close();
+    callback set-tab(int);
+    callback set-action(int);
+    callback commit-value(string, bool, string);
+    callback set-match(int);
+    callback set-optional(bool);
+    callback save-secret(string);
+    callback attach-file();
+    callback disk-file();
+    callback sample-file(string);
+    callback edit-locators();
+    callback cancel-locators();
+    callback save-locators();
+    callback locator-up(int);
+    callback locator-remove(int);
+    callback locator-add();
+    callback locator-strategy(int, int);
+    callback locator-role(int, string);
+    callback locator-name(int, string);
+    callback locator-value(int, string);
+    in-out property <length> panel-width: 340px;
+
+    width: root.panel-width;
+    background: Theme.bg;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        HorizontalLayout {
+            Text { text: "Step " + root.index; color: Theme.text; font-size: 15px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+            Btn { compact: true; has-icon: true; icon: @image-url("icons/close.svg"); tone: Theme.text-dim; tip: "Close the panel"; clicked => { root.close(); } }
+        }
+        Text { text: root.phrase; color: Theme.text-dim; font-size: 12px; wrap: word-wrap; }
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+            accessible-role: AccessibleRole.tab-list;
+            Pill { text: "Step"; selected: root.tab == 0; clicked => { root.set-tab(0); } }
+            Pill { text: "Locators"; selected: root.tab == 1; clicked => { root.set-tab(1); } }
+            Pill { text: "Raw"; selected: root.tab == 2; clicked => { root.set-tab(2); } }
+        }
+        Divider { }
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+                padding-right: 8px;
+
+                // ---- Step tab ----
+                if root.tab == 0: VerticalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        spacing: 4px;
+                        Label { text: "Action"; }
+                        if root.editable: Choice {
+                            model: root.action-labels;
+                            current-index: root.action-index;
+                            accessible-label: "Step action";
+                            selected(v) => { root.set-action(self.current-index); }
+                        }
+                        if !root.editable: Text { text: root.phrase; color: Theme.text-dim; font-size: 13px; wrap: word-wrap; }
+                    }
+                    if root.editable: VerticalLayout {
+                        spacing: 2px;
+                        CheckBox {
+                            text: "This step can be skipped";
+                            checked: root.optional;
+                            accessible-label: "This step can be skipped";
+                            toggled => { root.set-optional(self.checked); }
+                        }
+                        Hint { text: "When its element is not on the page, replay skips it and carries on instead of failing. For things that only appear sometimes, like a cookie banner."; }
+                    }
+                    if root.editable && root.needs-value && !root.secret: VerticalLayout {
+                        spacing: 4px;
+                        Label { text: root.value-label; }
+                        if root.matched: Choice {
+                            model: root.match-labels;
+                            current-index: root.match-index;
+                            accessible-label: "Step match mode";
+                            selected(v) => { root.set-match(self.current-index); }
+                        }
+                        Field {
+                            text <=> root.value;
+                            placeholder: root.value-label;
+                            label: "Step value";
+                            accepted(t) => { root.commit-value(t, root.is-param, root.param); }
+                            focus-lost(t) => { root.commit-value(t, root.is-param, root.param); }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Text { text: "Parameter"; color: Theme.text-dim; font-size: 11.5px; vertical-alignment: center; }
+                            Field {
+                                text <=> root.param;
+                                placeholder: "leave empty to use the value";
+                                label: "Step parameter name";
+                                mono: true;
+                                accepted(t) => { root.commit-value(root.value, t != "", t); }
+                                focus-lost(t) => { root.commit-value(root.value, t != "", t); }
+                            }
+                        }
+                    }
+                    if root.secret: VerticalLayout {
+                        spacing: 4px;
+                        Label { text: "Password"; }
+                        Text {
+                            text: root.secret-stored ? "Stored encrypted. Replay types the real password."
+                                : "Recorded before passwords were kept — replay will fail until one is entered.";
+                            color: root.secret-stored ? Theme.ok : Theme.danger;
+                            font-size: 11.5px;
+                            wrap: word-wrap;
+                        }
+                        if root.editable: HorizontalLayout {
+                            spacing: 6px;
+                            Field {
+                                text <=> root.new-secret;
+                                placeholder: "new password";
+                                label: "New password";
+                                password: true;
+                                horizontal-stretch: 1;
+                                accepted(t) => { if (t != "") { root.save-secret(t); } }
+                            }
+                            Btn { text: "Save"; enabled: root.new-secret != ""; clicked => { root.save-secret(root.new-secret); } }
+                        }
+                    }
+                    if root.is-upload: VerticalLayout {
+                        spacing: 4px;
+                        Label { text: "File"; }
+                        Text { text: root.file-text; color: root.file-missing ? Theme.danger : Theme.text; font-size: 12px; wrap: word-wrap; }
+                        if root.editable: HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Btn { text: "Attach file…"; compact: true; tip: "Copy a file into the flow. Replays the same file on any machine."; clicked => { root.attach-file(); } }
+                            Btn { text: "Use file from disk…"; compact: true; tip: "Read the file from this path at every replay, e.g. a document that changes."; clicked => { root.disk-file(); } }
+                        }
+                        if root.editable: HorizontalLayout {
+                            spacing: 4px;
+                            alignment: start;
+                            Text { text: "Generate a sample:"; color: Theme.text-dim; font-size: 11px; vertical-alignment: center; }
+                            for kind in ["pdf", "png", "docx", "csv", "txt"]: Pill {
+                                text: kind;
+                                size: 11.5px;
+                                selected: root.file-sample == kind;
+                                tip: "A small valid " + kind + " file, made at replay";
+                                clicked => { root.sample-file(kind); }
+                            }
+                        }
+                    }
+                    if root.dialogs.length > 0: VerticalLayout {
+                        spacing: 2px;
+                        Label { text: "Answers dialogs"; }
+                        for d in root.dialogs: Text { text: d; color: Theme.text; font-size: 12px; wrap: word-wrap; }
+                    }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Label { text: "Target element"; }
+                        Text { text: root.target; color: Theme.text; font-size: 13px; wrap: word-wrap; }
+                        if root.scope != "": Text { text: root.scope; color: Theme.text-dim; font-size: 11.5px; wrap: word-wrap; }
+                    }
+                    Lines { lines: root.outcome; }
+                }
+
+                // ---- Locators tab ----
+                if root.tab == 1 && root.locators.length == 0 && !root.editing-locators: Empty {
+                    title: "No locator";
+                    body: "This step has no element to find — a navigation or a wait does not use one.";
+                }
+                if root.tab == 1 && (root.locators.length > 0 || root.editing-locators): VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: root.locator-summary; color: Theme.text-dim; font-size: 11.5px; vertical-alignment: center; horizontal-stretch: 1; }
+                        if root.editing-locators: Btn { text: "Cancel"; compact: true; tone: Theme.text-dim; clicked => { root.cancel-locators(); } }
+                        if root.editing-locators: Btn { text: "Save"; compact: true; primary: true; tone: Theme.accent; clicked => { root.save-locators(); } }
+                        if !root.editing-locators && root.editable: Btn { text: "Edit"; compact: true; tone: Theme.accent; tip: "Edit the ways replay finds this element"; clicked => { root.edit-locators(); } }
+                    }
+                    if !root.editing-locators: VerticalLayout {
+                        spacing: 4px;
+                        for l in root.locators: HorizontalLayout {
+                            spacing: 6px;
+                            Text { text: l.mark; color: l.used ? Theme.ok : Theme.text; font-size: 12px; width: 20px; }
+                            Text { text: l.text; color: l.used ? Theme.ok : Theme.text; font-size: 12px; font-family: Theme.mono; wrap: word-wrap; horizontal-stretch: 1; }
+                        }
+                        Hint { text: "Each later way is tried for up to 2.5 s if the ones before it fail; the first gets the full 30 s."; }
+                    }
+                    if root.editing-locators: VerticalLayout {
+                        spacing: 6px;
+                        for l[n] in root.locators: HorizontalLayout {
+                            spacing: 4px;
+                            if n > 0: Btn { compact: true; has-icon: true; icon: @image-url("icons/up.svg"); tone: Theme.text-dim; tip: "Try way " + (n + 1) + " earlier"; clicked => { root.locator-up(n); } }
+                            if n == 0: Rectangle { width: 22px; }
+                            Choice {
+                                model: root.strategies;
+                                current-index: l.strategy-index;
+                                width: 96px;
+                                accessible-label: "Strategy of way " + (n + 1);
+                                selected(v) => { root.locator-strategy(n, self.current-index); }
+                            }
+                            if l.is-role: Field {
+                                text: l.role; placeholder: "role"; label: "Role of way " + (n + 1); width: 70px;
+                                edited(t) => { root.locator-role(n, t); }
+                            }
+                            if l.is-role: Field {
+                                text: l.name; placeholder: "accessible name (empty for any)"; label: "Accessible name of way " + (n + 1);
+                                horizontal-stretch: 1;
+                                edited(t) => { root.locator-name(n, t); }
+                            }
+                            if !l.is-role: Field {
+                                text: l.value; placeholder: "selector"; label: "Selector of way " + (n + 1); mono: true;
+                                horizontal-stretch: 1;
+                                edited(t) => { root.locator-value(n, t); }
+                            }
+                            Btn { compact: true; has-icon: true; icon: @image-url("icons/close.svg"); tone: Theme.danger; tip: "Remove way " + (n + 1); clicked => { root.locator-remove(n); } }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Btn { text: "+ Add a way"; compact: true; tone: Theme.text-dim; clicked => { root.locator-add(); } }
+                            Hint { text: "tried top to bottom"; vertical-alignment: center; }
+                        }
+                    }
+                }
+
+                // ---- Raw tab ----
+                if root.tab == 2 && root.raw.length == 0: Empty {
+                    title: "No locator";
+                    body: "This step has no element to find — a navigation or a wait does not use one.";
+                }
+                if root.tab == 2: VerticalLayout {
+                    spacing: 8px;
+                    for l in root.raw: VerticalLayout {
+                        spacing: 2px;
+                        Text { text: l.mark; color: l.used ? Theme.ok : Theme.text-dim; font-size: 11px; font-weight: 600; }
+                        TextEdit {
+                            text: l.text;
+                            read-only: true;
+                            height: 52px;
+                            font-size: 11.5px;
+                            accessible-label: "Playwright source of " + l.mark;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Splitter { height: parent.height; panel-width <=> root.panel-width; }
+}
+
+export component CodeView inherits Rectangle {
+    in property <string> code;
+    callback copy();
+    if root.code == "": Empty { width: parent.width; title: "No spec exported yet"; body: "Record some steps, then press Export spec."; }
+    if root.code != "": VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Text { text: "generated/<session>.spec.js"; color: Theme.text-dim; font-size: 11px; font-family: Theme.mono; vertical-alignment: center; }
+            Btn { text: "Copy"; compact: true; has-icon: true; icon: @image-url("icons/copy.svg"); tip: "Copy the spec to the clipboard"; clicked => { root.copy(); } }
+        }
+        TextEdit {
+            text: root.code;
+            read-only: true;
+            font-size: 12px;
+            vertical-stretch: 1;
+            accessible-label: "Generated Playwright spec";
+        }
+    }
+}
+
+export component RunsView inherits Rectangle {
+    in property <bool> has-session;
+    in property <[RunRow]> runs;
+    callback open-run(string);
+    if !root.has-session: Empty { width: parent.width; title: "No recording open"; body: "Open a recording to see its runs."; }
+    if root.has-session && root.runs.length == 0: Empty { width: parent.width; title: "Never replayed."; body: "Press Replay to record what happened."; }
+    if root.has-session && root.runs.length > 0: ScrollView {
+        accessible-role: AccessibleRole.list;
+        accessible-label: "Runs";
+        VerticalLayout {
+            alignment: start;
+            spacing: 6px;
+            padding-right: 8px;
+            for r in root.runs: Rectangle {
+                border-radius: Theme.r-lg;
+                border-width: 1px;
+                border-color: r.selected ? Theme.accent : Theme.border;
+                background: r.selected ? Theme.surface-2 : touch.has-hover ? Theme.surface-2 : transparent;
+                accessible-role: AccessibleRole.list-item;
+                accessible-label: r.label;
+                accessible-item-selectable: true;
+                accessible-item-selected: r.selected;
+                accessible-action-default => { root.open-run(r.id); }
+                touch := TouchArea { clicked => { root.open-run(r.id); } mouse-cursor: pointer; }
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 2px;
+                    Text {
+                        text: r.label;
+                        font-size: 12px;
+                        color: r.status == "passed" ? Theme.ok : r.status == "failed" ? Theme.danger : Theme.text-dim;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        padding-left: 14px;
+                        Text { text: r.duration; color: Theme.text-dim; font-size: 10.5px; }
+                        Text { text: r.dataset; color: Theme.accent; font-size: 10.5px; font-family: Theme.mono; overflow: elide; horizontal-stretch: 1; }
+                    }
+                    if r.failure != "": Text { text: r.failure; color: Theme.danger; font-size: 10.5px; wrap: word-wrap; }
+                }
+            }
+        }
+    }
+}
+
+export component RunPanel inherits Rectangle {
+    in property <string> badge;
+    in property <string> status;
+    in property <string> duration;
+    in property <string> summary;
+    in property <[string]> dataset;
+    in property <[RunStepRow]> steps;
+    callback close();
+    callback open-shot(int);
+    in-out property <length> panel-width: 420px;
+
+    width: root.panel-width;
+    background: Theme.bg;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: root.badge; font-size: 13px; font-weight: 600; vertical-alignment: center; color: root.status == "passed" ? Theme.ok : root.status == "failed" ? Theme.danger : Theme.text-dim; }
+            Text { text: root.duration; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+            Btn { compact: true; has-icon: true; icon: @image-url("icons/close.svg"); tone: Theme.text-dim; tip: "Close this run"; clicked => { root.close(); } }
+        }
+        Text { text: root.summary; color: Theme.text-dim; font-size: 11.5px; }
+        for d in root.dataset: Text { text: d; color: Theme.accent; font-size: 11px; font-family: Theme.mono; }
+        Divider { }
+        ScrollView {
+            vertical-stretch: 1;
+            accessible-role: AccessibleRole.list;
+            accessible-label: "Steps of this run";
+            VerticalLayout {
+                alignment: start;
+                spacing: 6px;
+                padding-right: 8px;
+                for s in root.steps: VerticalLayout {
+                    spacing: 2px;
+                    accessible-role: AccessibleRole.list-item;
+                    accessible-label: "Step " + s.index + ": " + s.name + ", " + s.status;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Dot { tone: s.status == "passed" ? Theme.ok : s.status == "failed" ? Theme.danger : Theme.text-dim; y: (parent.height - self.height) / 2; }
+                        Text { text: s.index; color: Theme.text-dim; font-size: 11px; font-family: Theme.mono; width: 18px; horizontal-alignment: right; vertical-alignment: center; accessible-role: AccessibleRole.none; }
+                        Text { text: s.name; color: s.status == "failed" ? Theme.danger : Theme.text; font-size: 12px; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; accessible-role: AccessibleRole.none; }
+                        Text { text: s.duration; color: Theme.text-dim; font-size: 10.5px; font-family: Theme.mono; vertical-alignment: center; accessible-role: AccessibleRole.none; }
+                    }
+                    if s.note != "": HorizontalLayout {
+                        padding-left: 26px;
+                        Text { text: s.note; color: s.note-is-fallback ? Theme.accent : Theme.text-dim; font-size: 10px; font-family: Theme.mono; wrap: word-wrap; }
+                    }
+                    if s.uploaded != "": HorizontalLayout {
+                        padding-left: 26px;
+                        Text { text: s.uploaded; color: Theme.text-dim; font-size: 10px; font-family: Theme.mono; wrap: word-wrap; }
+                    }
+                    if s.error != "": HorizontalLayout {
+                        padding-left: 26px;
+                        Text { text: s.error; color: Theme.danger; font-size: 10.5px; wrap: word-wrap; }
+                    }
+                    if s.has-shot: HorizontalLayout {
+                        padding-left: 26px;
+                        alignment: start;
+                        Rectangle {
+                            width: 132px;
+                            height: 78px;
+                            border-radius: Theme.r-sm;
+                            border-width: 1px;
+                            border-color: thumb-touch.has-hover ? Theme.accent : Theme.border;
+                            clip: true;
+                            accessible-role: AccessibleRole.button;
+                            accessible-label: "Open the screenshot of step " + s.index;
+                            accessible-action-default => { root.open-shot(s.shot-position); }
+                            Image { source: s.shot; width: parent.width; height: parent.height; image-fit: cover; accessible-role: AccessibleRole.none; }
+                            thumb-touch := TouchArea { clicked => { root.open-shot(s.shot-position); } mouse-cursor: pointer; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Splitter { height: parent.height; panel-width <=> root.panel-width; }
+}
+
+export component DatasetView inherits Rectangle {
+    in property <bool> has-session;
+    in property <[ParamRow]> params;
+    in property <string> replay-label;
+    in property <bool> can-replay;
+    callback value-edited(int, string);
+    callback replay();
+    callback clear();
+
+    VerticalLayout {
+        alignment: start;
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: "Parameters"; color: Theme.text; font-size: 15px; font-weight: 600; vertical-alignment: center; }
+            Text { text: "steps that take a value instead of typing one in"; color: Theme.text-dim; font-size: 11.5px; vertical-alignment: center; }
+        }
+        if root.params.length == 0: Empty {
+            title: "No parameters in this flow";
+            body: "Give a step a parameter name and it appears here, ready to change between runs without editing the flow itself.";
+        }
+        if root.params.length > 0: GridLayout {
+            spacing-horizontal: 16px;
+            spacing-vertical: 8px;
+            Row {
+                Label { text: "Name"; }
+                Label { text: "Value for the next run"; }
+                Label { text: "Recorded"; }
+            }
+            for p[i] in root.params: Row {
+                Text { text: p.name; color: Theme.accent; font-size: 12px; font-family: Theme.mono; vertical-alignment: center; }
+                Field {
+                    text: p.value;
+                    placeholder: "blank — use \"" + p.recorded + "\"";
+                    label: "Value for " + p.name;
+                    width: 240px;
+                    edited(t) => { root.value-edited(i, t); }
+                }
+                Text { text: p.recorded; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; overflow: elide; }
+            }
+        }
+        if root.params.length > 0: HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            Btn { text: root.replay-label; has-icon: true; icon: @image-url("icons/play.svg"); tone: Theme.accent; enabled: root.can-replay; clicked => { root.replay(); } }
+            Btn { text: "Use recorded values"; has-icon: true; icon: @image-url("icons/back.svg"); tone: Theme.text-dim; tip: "Clear every override"; clicked => { root.clear(); } }
+        }
+    }
+}
+
+// The full-size screenshot viewer, over the whole window. Esc or a click on
+// the backdrop closes it.
+export component ShotViewer inherits Rectangle {
+    in property <string> title;
+    in property <string> caption;
+    in property <image> shot;
+    in property <bool> loading;
+    in property <bool> can-prev;
+    in property <bool> can-next;
+    in property <string> counter;
+    callback close();
+    callback prev();
+    callback next();
+
+    background: #000000c0;
+    TouchArea { clicked => { root.close(); } }
+    FocusScope {
+        key-pressed(e) => {
+            if (e.text == Key.Escape) { root.close(); return accept; }
+            if (e.text == Key.LeftArrow && root.can-prev) { root.prev(); return accept; }
+            if (e.text == Key.RightArrow && root.can-next) { root.next(); return accept; }
+            reject
+        }
+        init => { self.focus(); }
+    }
+    Rectangle {
+        width: min(parent.width - 60px, 920px);
+        height: min(parent.height - 60px, 640px);
+        background: Theme.surface-2;
+        border-radius: Theme.r-lg;
+        border-width: 1px;
+        border-color: Theme.border;
+        accessible-role: AccessibleRole.groupbox;
+        accessible-label: "Screenshot viewer";
+        TouchArea { }
+        VerticalLayout {
+            padding: 12px;
+            spacing: 8px;
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: root.title; color: Theme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+                Text { text: root.caption; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                Btn { text: "Close"; clicked => { root.close(); } }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                if root.loading: Text { text: "Loading the screenshot…"; color: Theme.text-dim; font-size: 12px; }
+                if !root.loading: Image { source: root.shot; width: parent.width; height: parent.height; image-fit: contain; accessible-role: AccessibleRole.none; }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
+                Btn { text: "‹  Previous"; tip: "Previous"; accessible-label: "Previous"; enabled: root.can-prev; width: 120px; clicked => { root.prev(); } }
+                Text { text: root.counter; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                Btn { text: "Next  ›"; tip: "Next"; accessible-label: "Next"; enabled: root.can-next; width: 120px; clicked => { root.next(); } }
+            }
+            Hint { text: "click outside or press Escape to close"; horizontal-alignment: center; }
+        }
+    }
+}

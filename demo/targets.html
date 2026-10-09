@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow, frame and hidden targets</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 16px; background: #fff; color: #111; }
+      #log { margin-top: 12px; font-size: 13px; white-space: pre-wrap; }
+      .gone { display: none; }
+      .invisible { visibility: hidden; }
+      iframe { width: 420px; height: 180px; border: 1px solid #ccc; }
+      .row { padding: 4px 0; }
+      .shell { border: 1px dashed #bbb; padding: 6px; margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Targets</h1>
+
+    <!-- A web component whose option lives in a shadow root, as the
+         ui5-suggestion-item-custom-sf-header does. The host is what a person
+         clicks; the label is inside the shadow root. -->
+    <div id="searchbar" class="row">
+      <shadow-suggestion id="suggest" data-path="0.items.0"></shadow-suggestion>
+    </div>
+
+    <div class="row">
+      <button id="visible-button">Visible button</button>
+    </div>
+    <div class="row">
+      <button id="hidden-button" class="gone">Hidden button</button>
+    </div>
+    <div class="row">
+      <button id="invisible-button" class="invisible">Invisible button</button>
+    </div>
+
+    <!-- The SF shell shape: each host holds the next host inside its own
+         shadow root, so reaching the innermost element means crossing three
+         shadow boundaries, not one. -->
+    <div class="shell" id="shell">
+      <xweb-shellbar id="shellbar"></xweb-shellbar>
+    </div>
+
+    <div class="row">
+      <iframe id="inner" src="inner.html" title="inner"></iframe>
+    </div>
+
+    <div id="log">nothing clicked yet</div>
+
+    <script>
+      // Shadow DOM, as web-component UIs commonly use it.
+      class ShadowSuggestion extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: 'open' });
+          root.innerHTML = `
+            <style>
+              :host { display: block; padding: 8px; border: 1px solid #ddd; cursor: pointer; }
+              b { font-weight: 700; }
+            </style>
+            <slot></slot>
+            <div class="mainContent" tabindex="-1">
+              <div class="fullWidth">
+                <div class="text fullWidth"><b>Add New Employee</b></div>
+              </div>
+              <div class="secondaryContent"></div>
+            </div>`;
+        }
+      }
+      customElements.define('shadow-suggestion', ShadowSuggestion);
+
+      const log = (what) => {
+        document.getElementById('log').textContent = 'clicked: ' + what;
+      };
+
+      // Level 1: shellbar -> (shadow) utility-links -> (shadow) proxy-now.
+      class XwebUtilityLinks extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: 'open' });
+          root.innerHTML = `
+            <div class="links">
+              <xweb-proxy-now>Proxy</xweb-proxy-now>
+            </div>`;
+        }
+      }
+      customElements.define('xweb-utility-links', XwebUtilityLinks);
+
+      class XwebProxyNow extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: 'open' });
+          root.innerHTML = `
+            <style>:host { display: block; cursor: pointer; padding: 4px; }</style>
+            <button class="proxy-button">Proxy now</button>`;
+        }
+      }
+      customElements.define('xweb-proxy-now', XwebProxyNow);
+
+      class XwebShellbar extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: 'open' });
+          root.innerHTML = `<div class="bar"><xweb-utility-links></xweb-utility-links></div>`;
+        }
+      }
+      customElements.define('xweb-shellbar', XwebShellbar);
+
+      // Clicks on the innermost button bubble out through all three hosts.
+      document.getElementById('shellbar').addEventListener('click', () => log('nested shadow'));
+
+      document.getElementById('suggest').addEventListener('click', () => log('shadow host'));
+      document.getElementById('visible-button').addEventListener('click', () => log('visible button'));
+      document.getElementById('hidden-button').addEventListener('click', () => log('hidden button'));
+      document.getElementById('invisible-button').addEventListener('click', () => log('invisible button'));
+
+      // A second shell with the same tag names, so an innermost-tag-only
+      // locator is ambiguous and the ladder has to keep its ancestor chain.
+      const twin = document.getElementById('shell').cloneNode(true);
+      twin.id = 'shell-twin';
+      twin.querySelector('#shellbar').id = 'shellbar-twin';
+      document.getElementById('shell').after(twin);
+      document.getElementById('shellbar-twin').addEventListener('click', () => log('nested shadow twin'));
+
+      window.addEventListener('message', (e) => log(String(e.data)));
+    </script>
+  </body>
+</html>

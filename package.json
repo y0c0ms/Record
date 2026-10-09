@@ -1,0 +1,22 @@
+{
+  "name": "record",
+  "version": "1.0.0",
+  "description": "Record and replay browser flows with Playwright, driving Microsoft Edge",
+  "scripts": {
+    "start": "node server/index.js",
+    "record": "node cli.js record",
+    "replay": "node cli.js replay",
+    "codegen": "node cli.js codegen",
+    "test": "node tests/run-all.mjs",
+    "test:real": "node tests/run-all.mjs --real",
+    "spec": "playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@playwright/test": "1.63.0"
+  },
+  "private": true
+}

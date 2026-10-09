@@ -1,0 +1,22 @@
+# dependencies and build output
+node_modules/
+record-gui/target/
+record-slint/target/
+
+# runtime data: recordings, browser profiles, and the key that seals passwords
+data/
+generated/
+test-results/
+*.log
+*.err
+
+# throwaway browser profiles a headed run left in the project root
+smu*/
+smv*/
+
+# scratch
+*.tmp
+.tmp-verify/
+
+# written by tests
+tests/.probe-out.json

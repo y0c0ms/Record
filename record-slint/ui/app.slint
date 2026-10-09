@@ -1,0 +1,511 @@
+// The window. Every piece of state lives in Rust (src/state.rs); this file
+// only lays it out and forwards what the user does as callbacks. Properties
+// arrive pre-formatted from src/present.rs.
+
+import { Theme, Btn, Pill, Divider, Dot } from "theme.slint";
+import { FolderRow, StepRow, InsertState, SubflowRow, Line, LocatorRow, ParamRow, RunRow, RunStepRow } from "models.slint";
+import { Sidebar } from "sidebar.slint";
+import { StepEditor } from "steps.slint";
+import { StepPanel, CodeView, RunsView, RunPanel, DatasetView, ShotViewer } from "panels.slint";
+import { AboutSlint } from "std-widgets.slint";
+
+export { FolderRow, StepRow, InsertState, SubflowRow, Line, LocatorRow, ParamRow, RunRow, RunStepRow }
+
+export component AppWindow inherits Window {
+    title: "Record — Edge flow recorder";
+    icon: @image-url("icons/app.svg");
+    preferred-width: 1400px;
+    preferred-height: 860px;
+    min-width: 1000px;
+    min-height: 600px;
+    background: Theme.bg;
+    default-font-size: 13px;
+
+    // ---- status (shown in the footer) ----
+    in property <string> status-text;
+    in property <string> status-tone;
+
+    // ---- sidebar ----
+    in-out property <string> flow-name;
+    in property <string> demo-url;
+    in property <bool> can-edit-flow;
+    in property <bool> can-record;
+    in property <bool> interrupting;
+    in property <string> pause-label;
+    in property <string> stop-hint;
+    in property <bool> can-replay;
+    in property <bool> can-export;
+    in property <bool> has-session;
+    in property <string> session-name;
+    in property <string> session-summary;
+    in property <string> session-summary-tone;
+    // Where the open flow is filed, read-only next to the session summary.
+    in property <string> filed-under;
+    in-out property <string> search;
+    in property <[FolderRow]> folders;
+    in property <bool> folder-draft-open;
+    in property <bool> folder-draft-renaming;
+    in-out property <string> folder-draft-name;
+    in property <bool> recording-live;
+
+    // ---- views ----
+    in property <int> view;
+    in property <[StepRow]> steps;
+    in property <[string]> action-labels;
+    // How a check compares its expected value: contains / is exactly / regex.
+    in property <[string]> match-labels;
+    in property <bool> locked;
+    in property <InsertState> insert;
+    in property <bool> subflow-pick-open;
+    in property <int> subflow-pick-at;
+    in property <string> subflow-pick-position;
+    in property <[SubflowRow]> subflows;
+    in property <bool> subflow-mode;
+    in property <string> subflow-range;
+    in-out property <string> subflow-name;
+    in property <int> subflow-count;
+    in property <string> code;
+    in property <[RunRow]> runs;
+    in property <[ParamRow]> params;
+    in property <string> dataset-replay-label;
+
+    // Side panel widths, kept while the panels are closed and reopened.
+    in-out property <length> step-panel-width: 340px;
+    in-out property <length> run-panel-width: 420px;
+
+    // ---- step panel ----
+    in property <bool> panel-open;
+    in property <int> panel-index;
+    in property <string> panel-phrase;
+    in property <int> panel-tab;
+    in property <bool> panel-editable;
+    in property <int> panel-action-index;
+    in property <bool> panel-needs-value;
+    in property <string> panel-value-label;
+    in property <bool> panel-matched;
+    in property <bool> panel-optional;
+    in property <int> panel-match-index;
+    in-out property <string> panel-value;
+    in property <bool> panel-is-param;
+    in-out property <string> panel-param;
+    in property <bool> panel-secret;
+    in property <bool> panel-secret-stored;
+    in-out property <string> panel-new-secret;
+    in property <bool> panel-is-upload;
+    in property <string> panel-file-text;
+    in property <bool> panel-file-missing;
+    in property <string> panel-file-sample;
+    in property <[string]> panel-dialogs;
+    in property <string> panel-target;
+    in property <string> panel-scope;
+    in property <[Line]> panel-outcome;
+    in property <[LocatorRow]> panel-locators;
+    in property <bool> panel-editing-locators;
+    in property <string> panel-locator-summary;
+    in property <[string]> strategies;
+    in property <[LocatorRow]> panel-raw;
+
+    // ---- run panel ----
+    in property <bool> run-open;
+    in property <string> run-badge;
+    in property <string> run-status;
+    in property <string> run-duration;
+    in property <string> run-summary;
+    in property <[string]> run-dataset;
+    in property <[RunStepRow]> run-steps;
+
+    // ---- screenshot viewer ----
+    in property <bool> shot-open;
+    in property <string> shot-title;
+    in property <string> shot-caption;
+    in property <image> shot-image;
+    in property <bool> shot-loading;
+    in property <bool> shot-can-prev;
+    in property <bool> shot-can-next;
+    in property <string> shot-counter;
+
+    // ---- footer ----
+    in property <string> toast;
+    in property <bool> toast-error;
+    in-out property <bool> about-open;
+
+    // Sidebar.
+    callback use-demo();
+    callback flow-name-edited(string);
+    callback start-recording();
+    callback interrupt();
+    callback stop();
+    callback replay();
+    callback export-spec();
+    callback folder-file(string);
+    callback search-edited(string);
+    callback new-folder();
+    callback folder-draft-save();
+    callback folder-draft-cancel();
+    callback folder-draft-edited(string);
+    callback folder-select(string);
+    callback folder-toggle(string);
+    callback folder-new-child(string);
+    callback folder-rename(string);
+    callback folder-delete(string);
+    callback recording-open(string);
+    callback recording-delete(string);
+    callback reload();
+    // Views.
+    callback set-view(int);
+    callback select-step(int);
+    callback set-action(int, int);
+    callback commit-value(int, string, bool, string);
+    callback set-match(int, int);
+    callback delete-step(int);
+    callback reorder(int, int);
+    callback insert-at(int);
+    callback insert-action(int);
+    callback insert-label(string);
+    callback insert-value(string);
+    callback insert-param(string);
+    callback insert-match(int);
+    callback insert-add();
+    callback insert-capture();
+    callback insert-cancel();
+    callback capture-cancel();
+    callback pick-subflow(int);
+    callback subflow-insert(string);
+    callback subflow-delete(string);
+    callback subflow-pick-cancel();
+    callback toggle-subflow-mode();
+    callback toggle-subflow(int, bool);
+    callback subflow-name-edited(string);
+    callback subflow-save();
+    callback subflow-clear();
+    callback copy-code();
+    callback open-run(string);
+    callback dataset-edited(int, string);
+    callback dataset-replay();
+    callback dataset-clear();
+    // Step panel.
+    callback panel-close();
+    callback panel-set-tab(int);
+    callback panel-set-action(int);
+    callback panel-commit-value(string, bool, string);
+    callback panel-set-match(int);
+    callback panel-set-optional(bool);
+    callback panel-save-secret(string);
+    callback panel-attach-file();
+    callback panel-disk-file();
+    callback panel-sample-file(string);
+    callback panel-edit-locators();
+    callback panel-cancel-locators();
+    // Called on the UI thread when worker threads have results waiting.
+    callback drain();
+    callback escape();
+
+    callback panel-save-locators();
+    callback panel-locator-up(int);
+    callback panel-locator-remove(int);
+    callback panel-locator-add();
+    callback panel-locator-strategy(int, int);
+    callback panel-locator-role(int, string);
+    callback panel-locator-name(int, string);
+    callback panel-locator-value(int, string);
+    // Run panel + viewer.
+    callback run-close();
+    callback open-shot(int);
+    callback shot-close();
+    callback shot-prev();
+    callback shot-next();
+
+    function tone(name: string) -> color {
+        if (name == "ok") { return Theme.ok; }
+        if (name == "danger") { return Theme.danger; }
+        if (name == "accent") { return Theme.accent; }
+        if (name == "dim") { return Theme.text-dim; }
+        return Theme.text;
+    }
+
+    // Escape closes whatever side panel or form is open, from anywhere a
+    // focused control did not use the key itself.
+    keys := FocusScope {
+        // Holds focus when no control does — at startup, and when the control
+        // that had it is replaced by a re-render — so Escape and Tab always
+        // have somewhere to start from.
+        init => { self.focus(); }
+        key-pressed(e) => {
+            if (e.text == Key.Escape) { root.escape(); return accept; }
+            reject
+        }
+        VerticalLayout {
+            HorizontalLayout {
+                vertical-stretch: 1;
+                Sidebar {
+                    flow-name <=> root.flow-name;
+                    demo-url: root.demo-url;
+                    can-edit-flow: root.can-edit-flow;
+                    can-record: root.can-record;
+                    interrupting: root.interrupting;
+                    pause-label: root.pause-label;
+                    stop-hint: root.stop-hint;
+                    can-replay: root.can-replay;
+                    can-export: root.can-export;
+                    has-session: root.has-session;
+                    session-name: root.session-name;
+                    session-summary: root.session-summary;
+                    session-summary-tone: root.tone(root.session-summary-tone);
+                    filed-under: root.filed-under;
+                    search <=> root.search;
+                    folders: root.folders;
+                    folder-draft-open: root.folder-draft-open;
+                    folder-draft-renaming: root.folder-draft-renaming;
+                    folder-draft-name <=> root.folder-draft-name;
+                    recording-live: root.recording-live;
+                    use-demo => { root.use-demo(); }
+                    flow-name-edited(t) => { root.flow-name-edited(t); }
+                    start-recording => { root.start-recording(); }
+                    interrupt => { root.interrupt(); }
+                    stop => { root.stop(); }
+                    replay => { root.replay(); }
+                    export-spec => { root.export-spec(); }
+                    folder-file(id) => { root.folder-file(id); }
+                    search-edited(t) => { root.search-edited(t); }
+                    new-folder => { root.new-folder(); }
+                    folder-draft-save => { root.folder-draft-save(); }
+                    folder-draft-cancel => { root.folder-draft-cancel(); }
+                    folder-draft-edited(t) => { root.folder-draft-edited(t); }
+                    folder-select(id) => { root.folder-select(id); }
+                    folder-toggle(id) => { root.folder-toggle(id); }
+                    folder-new-child(id) => { root.folder-new-child(id); }
+                    folder-rename(id) => { root.folder-rename(id); }
+                    folder-delete(id) => { root.folder-delete(id); }
+                    recording-open(id) => { root.recording-open(id); }
+                    recording-delete(id) => { root.recording-delete(id); }
+                    reload => { root.reload(); }
+                }
+                Rectangle { width: 1px; background: Theme.border; }
+
+                // ---- main ----
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    padding: 12px;
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 4px;
+                        alignment: start;
+                        accessible-role: AccessibleRole.tab-list;
+                        accessible-label: "Views";
+                        Pill { text: "Steps"; selected: root.view == 0; clicked => { root.set-view(0); } }
+                        Pill { text: "Code"; selected: root.view == 1; clicked => { root.set-view(1); } }
+                        Pill { text: "Runs"; selected: root.view == 2; clicked => { root.set-view(2); } }
+                        Pill { text: "Dataset"; selected: root.view == 3; clicked => { root.set-view(3); } }
+                    }
+                    if root.view == 0: StepEditor {
+                        vertical-stretch: 1;
+                        steps: root.steps;
+                        follow: root.recording-live;
+                        action-labels: root.action-labels;
+                        match-labels: root.match-labels;
+                        locked: root.locked;
+                        insert: root.insert;
+                        subflow-pick-open: root.subflow-pick-open;
+                        subflow-pick-at: root.subflow-pick-at;
+                        subflow-pick-position: root.subflow-pick-position;
+                        subflows: root.subflows;
+                        subflow-mode: root.subflow-mode;
+                        subflow-range: root.subflow-range;
+                        subflow-name <=> root.subflow-name;
+                        subflow-count: root.subflow-count;
+                        select(i) => { root.select-step(i); }
+                        set-action(i, a) => { root.set-action(i, a); }
+                        commit-value(i, v, p, n) => { root.commit-value(i, v, p, n); }
+                        set-match(i, m) => { root.set-match(i, m); }
+                        delete(i) => { root.delete-step(i); }
+                        reorder(f, t) => { root.reorder(f, t); }
+                        insert-at(i) => { root.insert-at(i); }
+                        insert-action(i) => { root.insert-action(i); }
+                        insert-label(t) => { root.insert-label(t); }
+                        insert-value(t) => { root.insert-value(t); }
+                        insert-param(t) => { root.insert-param(t); }
+                        insert-match(m) => { root.insert-match(m); }
+                        insert-add => { root.insert-add(); }
+                        insert-capture => { root.insert-capture(); }
+                        insert-cancel => { root.insert-cancel(); }
+                        capture-cancel => { root.capture-cancel(); }
+                        pick-subflow(i) => { root.pick-subflow(i); }
+                        subflow-insert(id) => { root.subflow-insert(id); }
+                        subflow-delete(id) => { root.subflow-delete(id); }
+                        subflow-pick-cancel => { root.subflow-pick-cancel(); }
+                        toggle-subflow-mode => { root.toggle-subflow-mode(); }
+                        toggle-subflow(i, on) => { root.toggle-subflow(i, on); }
+                        subflow-name-edited(t) => { root.subflow-name-edited(t); }
+                        subflow-save => { root.subflow-save(); }
+                        subflow-clear => { root.subflow-clear(); }
+                    }
+                    if root.view == 1: CodeView {
+                        vertical-stretch: 1;
+                        code: root.code;
+                        copy => { root.copy-code(); }
+                    }
+                    if root.view == 2: RunsView {
+                        vertical-stretch: 1;
+                        has-session: root.has-session;
+                        runs: root.runs;
+                        open-run(id) => { root.open-run(id); }
+                    }
+                    if root.view == 3: DatasetView {
+                        vertical-stretch: 1;
+                        has-session: root.has-session;
+                        params: root.params;
+                        replay-label: root.dataset-replay-label;
+                        can-replay: root.can-replay;
+                        value-edited(i, t) => { root.dataset-edited(i, t); }
+                        replay => { root.dataset-replay(); }
+                        clear => { root.dataset-clear(); }
+                    }
+                }
+
+                // ---- right panel ----
+                if root.view == 0 && root.panel-open: StepPanel {
+                    panel-width <=> root.step-panel-width;
+                    index: root.panel-index;
+                    phrase: root.panel-phrase;
+                    tab: root.panel-tab;
+                    editable: root.panel-editable;
+                    action-labels: root.action-labels;
+                    action-index: root.panel-action-index;
+                    needs-value: root.panel-needs-value;
+                    value-label: root.panel-value-label;
+                    match-labels: root.match-labels;
+                    matched: root.panel-matched;
+                    match-index: root.panel-match-index;
+                    set-match(m) => { root.panel-set-match(m); }
+                    optional: root.panel-optional;
+                    set-optional(on) => { root.panel-set-optional(on); }
+                    value <=> root.panel-value;
+                    is-param: root.panel-is-param;
+                    param <=> root.panel-param;
+                    secret: root.panel-secret;
+                    secret-stored: root.panel-secret-stored;
+                    new-secret <=> root.panel-new-secret;
+                    is-upload: root.panel-is-upload;
+                    file-text: root.panel-file-text;
+                    file-missing: root.panel-file-missing;
+                    file-sample: root.panel-file-sample;
+                    dialogs: root.panel-dialogs;
+                    target: root.panel-target;
+                    scope: root.panel-scope;
+                    outcome: root.panel-outcome;
+                    locators: root.panel-locators;
+                    editing-locators: root.panel-editing-locators;
+                    locator-summary: root.panel-locator-summary;
+                    strategies: root.strategies;
+                    raw: root.panel-raw;
+                    close => { root.panel-close(); }
+                    set-tab(t) => { root.panel-set-tab(t); }
+                    set-action(a) => { root.panel-set-action(a); }
+                    commit-value(v, p, n) => { root.panel-commit-value(v, p, n); }
+                    save-secret(s) => { root.panel-save-secret(s); }
+                    attach-file => { root.panel-attach-file(); }
+                    disk-file => { root.panel-disk-file(); }
+                    sample-file(k) => { root.panel-sample-file(k); }
+                    edit-locators => { root.panel-edit-locators(); }
+                    cancel-locators => { root.panel-cancel-locators(); }
+                    save-locators => { root.panel-save-locators(); }
+                    locator-up(n) => { root.panel-locator-up(n); }
+                    locator-remove(n) => { root.panel-locator-remove(n); }
+                    locator-add => { root.panel-locator-add(); }
+                    locator-strategy(n, s) => { root.panel-locator-strategy(n, s); }
+                    locator-role(n, t) => { root.panel-locator-role(n, t); }
+                    locator-name(n, t) => { root.panel-locator-name(n, t); }
+                    locator-value(n, t) => { root.panel-locator-value(n, t); }
+                }
+                if root.view == 2 && root.run-open: RunPanel {
+                    panel-width <=> root.run-panel-width;
+                    badge: root.run-badge;
+                    status: root.run-status;
+                    duration: root.run-duration;
+                    summary: root.run-summary;
+                    dataset: root.run-dataset;
+                    steps: root.run-steps;
+                    close => { root.run-close(); }
+                    open-shot(p) => { root.open-shot(p); }
+                }
+            }
+
+            Divider { }
+            // ---- footer: messages on the left; connection status and About on
+            // the right. No header bar: the window title already names the app,
+            // and every pixel of height goes to the step list.
+            Rectangle {
+                height: 28px;
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 10px;
+                    spacing: 8px;
+                    Text {
+                        text: root.toast;
+                        color: root.toast-error ? Theme.danger : Theme.ok;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                        accessible-role: AccessibleRole.text;
+                    }
+                    Dot { tone: root.tone(root.status-tone); y: (parent.height - self.height) / 2; }
+                    Text { text: root.status-text; color: root.tone(root.status-tone); font-size: 11.5px; vertical-alignment: center; }
+                    Btn {
+                        text: "About";
+                        compact: true;
+                        has-icon: true;
+                        icon: @image-url("icons/info.svg");
+                        tone: Theme.text-dim;
+                        tip: "About Record and Slint";
+                        y: (parent.height - self.height) / 2;
+                        clicked => { root.about-open = true; }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.shot-open: ShotViewer {
+        width: root.width;
+        height: root.height;
+        title: root.shot-title;
+        caption: root.shot-caption;
+        shot: root.shot-image;
+        loading: root.shot-loading;
+        can-prev: root.shot-can-prev;
+        can-next: root.shot-can-next;
+        counter: root.shot-counter;
+        close => { root.shot-close(); }
+        prev => { root.shot-prev(); }
+        next => { root.shot-next(); }
+    }
+
+    // The About screen, required by Slint's royalty-free licence and kept
+    // reachable from the header.
+    if root.about-open: Rectangle {
+        width: root.width;
+        height: root.height;
+        background: #000000c0;
+        TouchArea { clicked => { root.about-open = false; } }
+        Rectangle {
+            width: 420px;
+            height: 320px;
+            background: Theme.surface-2;
+            border-radius: Theme.r-lg;
+            border-width: 1px;
+            border-color: Theme.border;
+            accessible-role: AccessibleRole.groupbox;
+            accessible-label: "About Record";
+            TouchArea { }
+            VerticalLayout {
+                padding: 16px;
+                spacing: 10px;
+                Text { text: "Record"; color: Theme.text; font-size: 18px; font-weight: 700; }
+                Text { text: "Edge flow recorder and replayer, driven by Playwright."; color: Theme.text-dim; font-size: 12px; wrap: word-wrap; }
+                AboutSlint { }
+                HorizontalLayout { alignment: end; Btn { text: "Close"; clicked => { root.about-open = false; } } }
+            }
+        }
+    }
+}

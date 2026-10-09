@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Checks demo</title>
+<style>
+  body { font: 15px/1.4 Segoe UI, sans-serif; margin: 40px; }
+  #result[hidden] { display: none; }
+  .item { padding: 2px 0; }
+</style>
+</head>
+<body>
+  <h1>Order form</h1>
+  <form id="order">
+    <label for="name">Full name</label>
+    <input id="name" name="name">
+    <label><input type="checkbox" id="terms"> I accept the terms</label>
+    <button type="button" id="place">Place order</button>
+  </form>
+  <!-- `?wrong` makes the page behave differently, so the same recorded
+       checks can be shown to fail. -->
+  <p id="result" hidden></p>
+  <ul id="items"></ul>
+  <div id="spinner">Loading…</div>
+  <script>
+    const wrong = location.search.includes('wrong');
+    document.getElementById('place').addEventListener('click', () => {
+      const name = document.getElementById('name').value;
+      // Rendered late on purpose: a check has to wait for the page, not
+      // judge it on the first look.
+      setTimeout(() => {
+        const r = document.getElementById('result');
+        r.textContent = wrong ? `Order failed for ${name}` : `Thank you ${name}, your order is placed.`;
+        r.hidden = false;
+        const ul = document.getElementById('items');
+        ul.innerHTML = '';
+        for (let i = 0; i < (wrong ? 2 : 3); i++) {
+          const li = document.createElement('li');
+          li.className = 'item';
+          li.textContent = `Item ${i + 1}`;
+          ul.appendChild(li);
+        }
+        if (!wrong) document.getElementById('spinner').remove();
+        history.pushState({}, '', wrong ? '#failed' : '#done');
+      }, 600);
+    });
+  </script>
+</body>
+</html>

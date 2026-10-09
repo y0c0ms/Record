@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Real-world shapes</title>
+<style>
+  /* A menu shown in capitals by CSS: the DOM says "Investidor". */
+  nav a { text-transform: uppercase; margin-right: 12px; }
+  .mobile { display: none; }
+</style>
+</head>
+<body>
+  <!-- The same link in the header and the footer, both visible. -->
+  <nav id="site-header-menu"><ul><li><a href="#a">Sobre nós</a></li><li><a href="#b">Media</a></li><li><a id="hdr-inv" href="#investidor">Investidor</a></li><li><a id="hdr-car" href="#carreiras">Carreiras</a></li></ul></nav>
+  <p id="out"></p>
+  <!-- One embed twice, one hidden per breakpoint, with the builder's generic title. -->
+  <iframe title="Iframe" src="inner.html?copy=desktop" width="300" height="120"></iframe>
+  <iframe class="mobile" title="Iframe" src="inner.html?copy=mobile" width="300" height="120"></iframe>
+  <footer style="margin-top:40px"><a id="ftr-inv" href="#investidor-footer">Investidor</a></footer>
+  <script>
+    for (const a of document.querySelectorAll('a')) {
+      a.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('out').textContent = 'clicked ' + a.id; });
+    }
+  </script>
+</body>
+</html>

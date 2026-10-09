@@ -1,0 +1,388 @@
+// Design tokens, from gpui-kit's token set (crates/base/src/theme_tokens.rs):
+// colours are named for the role they play — background, foreground, muted,
+// border — never for the hue, so a new token cannot accidentally be an
+// unreadable one on the dark theme.
+
+export global Theme {
+    // gpui-kit ColorTokens::dark(). Contrast on bg: text 18.97:1, text-dim 7.85:1.
+    out property <color> bg: #0a0a0a;
+    out property <color> surface: #262626;
+    out property <color> surface-2: #1a1a1a;
+    out property <color> text: #fafafa;
+    out property <color> text-dim: #a3a3a3;
+    out property <color> border: #262626;
+    out property <color> accent: #7a9eff;
+    out property <color> danger: #e7545f;
+    out property <color> ok: #3eb97e;
+
+    // RadiusTokens: sm 3, md 6, lg 8.
+    out property <length> r-sm: 3px;
+    out property <length> r-md: 6px;
+    out property <length> r-lg: 8px;
+
+    // SpacingTokens.
+    out property <length> sp-2: 2px;
+    out property <length> sp-4: 4px;
+    out property <length> sp-8: 8px;
+    out property <length> sp-12: 12px;
+    out property <length> sp-16: 16px;
+    out property <length> sp-24: 24px;
+
+    // TypographyTokens.
+    out property <length> fs-xxs: 10.5px;
+    out property <length> fs-xs: 12px;
+    out property <length> fs-sm: 14px;
+    out property <length> fs-md: 16px;
+    out property <length> fs-lg: 18px;
+    out property <string> mono: "Cascadia Mono";
+}
+
+// A button drawn in the app's own style: text, an optional icon, and a tone.
+// Exposed to accessibility as a button with its label, so a screen reader — and
+// the test harness — can find and press it by name.
+// The outline a keyboard user follows. Drawn only for keyboard focus: a ring
+// left behind on every clicked button would read as a second selection.
+export component FocusRing inherits Rectangle {
+    x: -2px;
+    y: -2px;
+    border-radius: Theme.r-md + 2px;
+    border-width: 2px;
+    border-color: Theme.accent;
+    accessible-role: AccessibleRole.none;
+}
+
+export component Btn inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <color> tone: Theme.text;
+    in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <bool> compact: false;
+    in property <string> tip;
+    callback clicked;
+
+    accessible-role: AccessibleRole.button;
+    accessible-label: root.text != "" ? root.text : root.tip;
+    accessible-description: root.tip;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+
+    height: root.compact ? 22px : 28px;
+    min-width: root.compact ? 22px : 28px;
+    border-radius: Theme.r-md;
+    background: !root.enabled ? transparent
+        : root.primary ? (touch.has-hover ? root.tone.darker(10%) : root.tone)
+        : touch.has-hover ? Theme.surface : transparent;
+    border-width: root.primary ? 0px : 1px;
+    border-color: touch.has-hover && root.enabled ? Theme.surface : Theme.border;
+
+    HorizontalLayout {
+        padding-left: root.text == "" ? 0px : (root.compact ? 6px : 10px);
+        padding-right: root.text == "" ? 0px : (root.compact ? 6px : 10px);
+        spacing: 6px;
+        alignment: center;
+        if root.has-icon: Image {
+            source: root.icon;
+            width: root.compact ? 12px : 14px;
+            height: root.compact ? 12px : 14px;
+            colorize: !root.enabled ? Theme.text-dim.with-alpha(0.4)
+                : root.primary ? Theme.bg : root.tone;
+            y: (parent.height - self.height) / 2;
+            accessible-role: AccessibleRole.none;
+        }
+        if root.text != "": Text {
+            text: root.text;
+            color: !root.enabled ? Theme.text-dim.with-alpha(0.5)
+                : root.primary ? Theme.bg : root.tone;
+            font-size: root.compact ? Theme.fs-xxs : 12.5px;
+            font-weight: root.primary ? 600 : 400;
+            vertical-alignment: center;
+            accessible-role: AccessibleRole.none;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { keys.focus(); root.clicked(); }
+    }
+    // Tab reaches every enabled button; Enter or Space presses it.
+    property <bool> keyboard;
+    keys := FocusScope {
+        focus-gained(reason) => { root.keyboard = reason != FocusReason.pointer-click; }
+        enabled: root.enabled;
+        key-pressed(e) => {
+            if (e.text == Key.Return || e.text == " ") { root.clicked(); return accept; }
+            reject
+        }
+    }
+    FocusRing { width: root.width + 4px; height: root.height + 4px; visible: keys.has-focus && root.keyboard; }
+    // A tooltip shows on hover, after a delay, on its own. An empty one never
+    // shows. Text is interpolated so `*` or `_` in a hint stays literal-safe.
+    Tooltip { text: @markdown("\{root.tip}"); }
+}
+
+// A selectable item: a tab, a folder, a recording. Exposed as a tab/list item
+// with its label and selection state.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <color> tone: Theme.text;
+    in property <length> size: 13px;
+    in property <bool> bold: false;
+    in property <string> tip;
+    callback clicked;
+
+    accessible-role: AccessibleRole.tab;
+    accessible-label: root.text;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
+    accessible-description: root.tip;
+    accessible-action-default => { root.clicked(); }
+
+    height: 26px;
+    border-radius: Theme.r-md;
+    background: root.selected ? Theme.surface : touch.has-hover ? Theme.surface-2 : transparent;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        Text {
+            text: root.text;
+            color: root.selected ? Theme.text : root.tone;
+            font-size: root.size;
+            font-weight: root.bold ? 600 : 400;
+            vertical-alignment: center;
+            overflow: elide;
+            accessible-role: AccessibleRole.none;
+        }
+    }
+    touch := TouchArea { clicked => { keys.focus(); root.clicked(); } mouse-cursor: pointer; }
+    property <bool> keyboard;
+    keys := FocusScope {
+        focus-gained(reason) => { root.keyboard = reason != FocusReason.pointer-click; }
+        key-pressed(e) => {
+            if (e.text == Key.Return || e.text == " ") { root.clicked(); return accept; }
+            reject
+        }
+    }
+    FocusRing { width: root.width + 4px; height: root.height + 4px; visible: keys.has-focus && root.keyboard; }
+    Tooltip { text: @markdown("\{root.tip}"); }
+}
+
+// A single-line text field in the app's style.
+export component Field inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <bool> password: false;
+    in property <bool> mono: false;
+    in property <string> label;
+    out property <bool> has-focus: input.has-focus;
+    callback edited(string);
+    callback accepted(string);
+    callback focus-lost(string);
+
+    height: 28px;
+    // A text input draws its text even where there is no room for it: without
+    // this a long value — a URL especially — runs out of the box and over the
+    // controls beside it. Verified by rendering the same 325-character URL in
+    // both builds: unclipped, 193px of it spilled past the box.
+    clip: true;
+    // A field may be squeezed by its neighbours. Its natural width is that of
+    // its text, so without this a long flow name pushed the "Use demo" button
+    // out past the edge of the sidebar.
+    min-width: 0px;
+    border-radius: Theme.r-md;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.border;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        input := TextInput {
+            text <=> root.text;
+            enabled: root.enabled;
+            input-type: root.password ? InputType.password : InputType.text;
+            color: root.enabled ? Theme.text : Theme.text-dim;
+            font-size: 12.5px;
+            font-family: root.mono ? Theme.mono : "";
+            vertical-alignment: center;
+            single-line: true;
+            accessible-label: root.label != "" ? root.label : root.placeholder;
+            accessible-placeholder-text: root.placeholder;
+            edited => { root.edited(self.text); }
+            accepted => { root.accepted(self.text); }
+            changed has-focus => {
+                if (!self.has-focus) { root.focus-lost(self.text); }
+            }
+        }
+    }
+    if root.text == "" && !input.has-focus: Text {
+        x: 8px;
+        width: parent.width - 16px;
+        text: root.placeholder;
+        color: Theme.text-dim.with-alpha(0.6);
+        font-size: 12.5px;
+        height: parent.height;
+        vertical-alignment: center;
+        overflow: elide;
+        accessible-role: AccessibleRole.none;
+    }
+}
+
+// A dropdown in the app's style. Built here rather than on the std ComboBox:
+// that one's options expose no accessible action, so a screen reader (or the
+// test harness) could open it but never pick anything. Same interface as the
+// std one — `model`, `current-index`, `current-value`, `selected(value)`.
+export component Choice inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: 0;
+    out property <string> current-value: root.model[root.current-index];
+    in property <bool> enabled: true;
+    callback selected(string);
+
+    height: 28px;
+    min-width: 96px;
+    border-radius: Theme.r-md;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: touch.has-hover && root.enabled ? Theme.surface : Theme.border;
+
+    accessible-role: AccessibleRole.combobox;
+    accessible-value: root.current-value;
+    accessible-enabled: root.enabled;
+    accessible-expandable: true;
+    accessible-action-expand => { if (root.enabled) { popup.show(); } }
+    accessible-action-default => { if (root.enabled) { popup.show(); } }
+
+    function pick(i: int) {
+        root.current-index = i;
+        root.selected(root.model[i]);
+        popup.close();
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 6px;
+        spacing: 4px;
+        Text {
+            text: root.current-value;
+            color: root.enabled ? Theme.text : Theme.text-dim;
+            font-size: 12.5px;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+            accessible-role: AccessibleRole.none;
+        }
+        Image {
+            source: @image-url("icons/chevron-down.svg");
+            width: 12px;
+            height: 12px;
+            y: (parent.height - self.height) / 2;
+            colorize: Theme.text-dim;
+            accessible-role: AccessibleRole.none;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { keys.focus(); popup.show(); }
+    }
+    // Focused, Up/Down change the choice in place and Enter/Space opens the
+    // list — the keys a native combo box answers to.
+    property <bool> keyboard;
+    keys := FocusScope {
+        focus-gained(reason) => { root.keyboard = reason != FocusReason.pointer-click; }
+        enabled: root.enabled;
+        key-pressed(e) => {
+            if (e.text == Key.UpArrow && root.current-index > 0) { root.pick(root.current-index - 1); return accept; }
+            if (e.text == Key.DownArrow && root.current-index < root.model.length - 1) { root.pick(root.current-index + 1); return accept; }
+            if (e.text == Key.Return || e.text == " ") { popup.show(); return accept; }
+            reject
+        }
+    }
+    FocusRing { width: root.width + 4px; height: root.height + 4px; visible: keys.has-focus && root.keyboard; }
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 2px;
+        width: max(root.width, 140px);
+        close-policy: PopupClosePolicy.close-on-click-outside;
+        Rectangle {
+            background: Theme.surface-2;
+            border-radius: Theme.r-md;
+            border-width: 1px;
+            border-color: Theme.border;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: #00000080;
+            VerticalLayout {
+                padding: 4px;
+                accessible-role: AccessibleRole.list;
+                for value[i] in root.model: Rectangle {
+                    height: 26px;
+                    border-radius: Theme.r-sm;
+                    background: item-touch.has-hover ? Theme.surface : i == root.current-index ? Theme.bg : transparent;
+                    accessible-role: AccessibleRole.list-item;
+                    accessible-label: value;
+                    accessible-item-selectable: true;
+                    accessible-item-selected: i == root.current-index;
+                    accessible-item-index: i;
+                    accessible-action-default => { root.pick(i); }
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        Text {
+                            text: value;
+                            color: i == root.current-index ? Theme.accent : Theme.text;
+                            font-size: 12.5px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            accessible-role: AccessibleRole.none;
+                        }
+                    }
+                    item-touch := TouchArea { clicked => { root.pick(i); } mouse-cursor: pointer; }
+                }
+            }
+        }
+    }
+}
+
+export component Label inherits Text {
+    color: Theme.text-dim;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+export component Hint inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.fs-xxs;
+    wrap: word-wrap;
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+// A status dot: filled for something live, outlined otherwise.
+export component Dot inherits Rectangle {
+    in property <color> tone: Theme.text-dim;
+    in property <bool> filled: true;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: root.filled ? root.tone : transparent;
+    border-width: root.filled ? 0px : 1.2px;
+    border-color: root.tone;
+}
+
+// Centered message for an empty view.
+export component Empty inherits VerticalLayout {
+    in property <string> title;
+    in property <string> body;
+    alignment: start;
+    padding-top: 24px;
+    spacing: 4px;
+    Text { text: root.title; color: Theme.text-dim; font-size: 14px; horizontal-alignment: center; }
+    Text { text: root.body; color: Theme.text-dim; font-size: 12px; horizontal-alignment: center; wrap: word-wrap; }
+}

@@ -1,0 +1,584 @@
+// The no-code step editor: one card per step, an insert slot between every
+// pair, drag to reorder, and the forms for adding a step by hand, by capture,
+// or from a subflow.
+
+import { FocusRing, Theme, Btn, Field, Choice, Label, Hint, Dot } from "theme.slint";
+import { StepRow, ActionOption, InsertState, SubflowRow } from "models.slint";
+import { ScrollView, CheckBox } from "std-widgets.slint";
+
+// The "+" between two steps. Its accessible name says where the step goes.
+component InsertSlot inherits Rectangle {
+    in property <int> at;
+    in property <string> position;
+    in property <bool> has-subflows;
+    in property <bool> enabled: true;
+    callback insert(int);
+    callback pick-subflow(int);
+
+    height: 22px;
+    HorizontalLayout {
+        alignment: center;
+        spacing: 8px;
+        Rectangle {
+            width: 20px;
+            height: 20px;
+            y: 1px;
+            border-radius: 10px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: plus-touch.has-hover ? Theme.accent : Theme.border;
+            accessible-role: AccessibleRole.button;
+            accessible-label: "Insert a step " + root.position;
+            accessible-enabled: root.enabled;
+            accessible-action-default => { if (root.enabled) { root.insert(root.at); } }
+            Text {
+                text: "+";
+                color: plus-touch.has-hover ? Theme.accent : Theme.text-dim;
+                font-size: 13px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                accessible-role: AccessibleRole.none;
+            }
+            plus-touch := TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: pointer;
+                clicked => { root.insert(root.at); }
+            }
+            Tooltip { text: @markdown("Insert a step \{root.position}"); }
+        }
+        if root.has-subflows && root.enabled: Btn {
+            text: "from a subflow";
+            compact: true;
+            tone: Theme.accent;
+            tip: "Add a saved subflow " + root.position;
+            accessible-label: "Add a saved subflow " + root.position;
+            clicked => { root.pick-subflow(root.at); }
+        }
+    }
+}
+
+component InsertForm inherits Rectangle {
+    in property <InsertState> state;
+    in property <[string]> action-labels;
+    in property <[string]> match-labels;
+    callback set-action(int);
+    callback set-match(int);
+    callback set-label(string);
+    callback set-value(string);
+    callback set-param(string);
+    callback add();
+    callback capture();
+    callback cancel();
+    callback cancel-capture();
+
+    border-radius: Theme.r-lg;
+    border-width: 1px;
+    border-color: Theme.accent.with-alpha(0.5);
+    background: Theme.surface-2;
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 6px;
+        if root.state.capturing: VerticalLayout {
+            spacing: 6px;
+            Text { text: "Recording one step"; color: Theme.accent; font-size: 11px; font-weight: 600; }
+            Hint { text: "Act on the element in the Edge window. The step is captured and the window closes on its own."; }
+            HorizontalLayout { alignment: start; Btn { text: "Cancel capture"; compact: true; clicked => { root.cancel-capture(); } } }
+        }
+        if !root.state.capturing: VerticalLayout {
+            spacing: 6px;
+            HorizontalLayout {
+                Text { text: "New step " + root.state.position; color: Theme.accent; font-size: 11px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+                Btn {
+                    compact: true; has-icon: true; icon: @image-url("icons/close.svg");
+                    tone: Theme.text-dim; tip: "Cancel";
+                    clicked => { root.cancel(); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Action"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; width: 60px; }
+                Choice {
+                    model: root.action-labels;
+                    current-index: root.state.action-index;
+                    accessible-label: "New step action";
+                    width: 180px;
+                    selected(v) => { root.set-action(self.current-index); }
+                }
+            }
+            if root.state.needs-target: Field {
+                text: root.state.label;
+                placeholder: root.state.target-label + ", e.g. " + (root.state.target-label == "What to check" ? "Welcome back" : "Buy");
+                label: root.state.target-label;
+                edited(t) => { root.set-label(t); }
+            }
+            if root.state.needs-value: HorizontalLayout {
+                spacing: 6px;
+                if root.state.matched: Choice {
+                    model: root.match-labels;
+                    current-index: root.state.match-index;
+                    accessible-label: "New step match mode";
+                    width: 130px;
+                    selected(v) => { root.set-match(self.current-index); }
+                }
+                Field {
+                    text: root.state.value;
+                    placeholder: root.state.value-label;
+                    label: "New step " + root.state.value-label;
+                    horizontal-stretch: 1;
+                    edited(t) => { root.set-value(t); }
+                }
+            }
+            if root.state.needs-value: Field {
+                text: root.state.param;
+                placeholder: "Optional: make this value a dataset parameter, e.g. SEARCH";
+                label: "Dataset parameter name";
+                edited(t) => { root.set-param(t); }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+                Btn { text: "Add step"; primary: true; tone: Theme.accent; enabled: root.state.ready; compact: true; clicked => { root.add(); } }
+                if root.state.needs-target: Btn {
+                    text: "Record this step in the browser instead";
+                    compact: true;
+                    tone: Theme.text-dim;
+                    tip: "Open the browser and capture the element you act on";
+                    clicked => { root.capture(); }
+                }
+            }
+        }
+    }
+}
+
+component SubflowPicker inherits Rectangle {
+    in property <string> position;
+    in property <[SubflowRow]> subflows;
+    callback pick(string);
+    callback delete(string);
+    callback cancel();
+
+    border-radius: Theme.r-lg;
+    border-width: 1px;
+    border-color: Theme.accent.with-alpha(0.5);
+    background: Theme.surface-2;
+    VerticalLayout {
+        padding: 10px;
+        spacing: 4px;
+        HorizontalLayout {
+            Text { text: "Add a subflow " + root.position; color: Theme.accent; font-size: 11px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+            Btn { compact: true; has-icon: true; icon: @image-url("icons/close.svg"); tone: Theme.text-dim; tip: "Cancel"; clicked => { root.cancel(); } }
+        }
+        if root.subflows.length == 0: Hint { text: "No subflows yet. Tick the steps to reuse, name them, and save — then they can be added here."; }
+        for s in root.subflows: HorizontalLayout {
+            spacing: 4px;
+            Btn { text: s.label; compact: true; tone: Theme.text; horizontal-stretch: 1; tip: "Insert this subflow"; clicked => { root.pick(s.id); } }
+            Btn { compact: true; has-icon: true; icon: @image-url("icons/trash.svg"); tone: Theme.danger; tip: "Delete subflow " + s.label; clicked => { root.delete(s.id); } }
+        }
+    }
+}
+
+// One step. The whole card selects it (opening the side panel); the grip drags
+// it; the action, value and parameter are edited in place.
+component StepCard inherits Rectangle {
+    in property <StepRow> step;
+    in property <[string]> action-labels;
+    in property <[string]> match-labels;
+    in property <bool> locked;
+    in property <bool> subflow-mode;
+    in property <bool> drop-target;
+    callback select(int);
+    callback set-action(int, int);
+    callback commit-value(int, string, bool, string);
+    callback set-match(int, int);
+    callback delete(int);
+    callback toggle-subflow(int, bool);
+    callback drag-start(int);
+    callback drag-move(int, length);
+    callback drag-end(int);
+
+    property <string> draft-value: root.step.value;
+    property <bool> draft-is-param: root.step.is-param;
+    property <string> draft-param: root.step.param;
+    // Resets the drafts when the underlying step changes (after a save or a
+    // reorder), so a card never shows a value the server no longer holds.
+    changed step => {
+        root.draft-value = root.step.value;
+        root.draft-is-param = root.step.is-param;
+        root.draft-param = root.step.param;
+    }
+
+    border-radius: Theme.r-lg;
+    border-width: 1px;
+    border-color: root.step.selected ? Theme.accent
+        : root.drop-target ? Theme.accent.with-alpha(0.6)
+        : root.step.status == "failed" ? Theme.danger.with-alpha(0.6)
+        : root.step.status == "passed" ? Theme.ok.with-alpha(0.35)
+        : root.step.is-param ? Theme.accent.with-alpha(0.35) : Theme.border;
+    background: root.step.selected ? Theme.surface-2 : Theme.bg;
+
+    accessible-role: AccessibleRole.list-item;
+    accessible-label: "Step " + root.step.index + ": " + root.step.phrase;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.step.selected;
+    accessible-description: root.step.status;
+    accessible-action-default => { root.select(root.step.index); }
+
+    card-touch := TouchArea {
+        clicked => { card-keys.focus(); root.select(root.step.index); }
+    }
+    // Tab moves card to card; Enter opens the step, Delete removes it. Only
+    // keys the card's own fields do not use: typing in a value never reaches
+    // here, because the field has focus then, not the card.
+    property <bool> keyboard;
+    card-keys := FocusScope {
+        focus-gained(reason) => { root.keyboard = reason != FocusReason.pointer-click; }
+        key-pressed(e) => {
+            if (e.text == Key.Return || e.text == " ") { root.select(root.step.index); return accept; }
+            if (e.text == Key.Delete && root.step.editable && !root.locked) { root.delete(root.step.index); return accept; }
+            reject
+        }
+    }
+    FocusRing { width: root.width + 4px; height: root.height + 4px; visible: card-keys.has-focus && root.keyboard; }
+
+    // A check is a claim about the page, not an action on it; a stripe down
+    // its edge lets a reader see where a flow verifies something.
+    if root.step.is-check: Rectangle {
+        x: 0; y: 6px; width: 3px; height: parent.height - 12px;
+        border-radius: 1.5px;
+        background: Theme.ok;
+        accessible-role: AccessibleRole.none;
+    }
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 6px;
+            if root.subflow-mode: CheckBox {
+                checked: root.step.in-subflow;
+                accessible-label: "Include step " + root.step.index + " in the subflow";
+                toggled => { root.toggle-subflow(root.step.index, self.checked); }
+            }
+            if root.step.editable && !root.locked: Rectangle {
+                width: 16px;
+                accessible-role: AccessibleRole.button;
+                accessible-label: "Drag step " + root.step.index;
+                Image { source: @image-url("icons/grip.svg"); width: 12px; height: 12px; colorize: grip.pressed ? Theme.accent : Theme.text-dim; accessible-role: AccessibleRole.none; }
+                grip := TouchArea {
+                    mouse-cursor: grab;
+                    pointer-event(e) => {
+                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) {
+                            root.drag-start(root.step.index);
+                        } else if (e.kind == PointerEventKind.up) {
+                            root.drag-end(root.step.index);
+                        }
+                    }
+                    moved => {
+                        if (self.pressed) { root.drag-move(root.step.index, self.mouse-y - self.pressed-y); }
+                    }
+                }
+            }
+            if !root.step.editable || root.locked: Rectangle { width: 16px; }
+            Dot {
+                tone: root.step.status == "passed" ? Theme.ok : root.step.status == "failed" ? Theme.danger : root.step.status == "running" ? Theme.accent : Theme.text-dim;
+                filled: root.step.status != "";
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: root.step.index;
+                color: Theme.text-dim;
+                font-size: 11.5px;
+                font-family: Theme.mono;
+                vertical-alignment: center;
+                width: 20px;
+                horizontal-alignment: right;
+                accessible-role: AccessibleRole.none;
+            }
+            if !root.step.editable || root.locked: Text {
+                text: root.step.phrase;
+                color: Theme.text-dim;
+                font-size: 13px;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            if root.step.editable && !root.locked: Choice {
+                model: root.action-labels;
+                current-index: root.step.action-index;
+                accessible-label: "Action of step " + root.step.index;
+                width: 130px;
+                selected(v) => { root.set-action(root.step.index, self.current-index); }
+            }
+            if root.step.editable && !root.locked && root.step.secret: Text {
+                text: root.step.secret-stored ? "•••••••• (stored)" : "password missing — open the step";
+                color: root.step.secret-stored ? Theme.text-dim : Theme.danger;
+                font-size: 11.5px;
+                vertical-alignment: center;
+            }
+            if root.step.editable && !root.locked && root.step.matched: Choice {
+                model: root.match-labels;
+                current-index: root.step.match-index;
+                accessible-label: "Match mode of step " + root.step.index;
+                width: 120px;
+                selected(v) => { root.set-match(root.step.index, self.current-index); }
+            }
+            if root.step.editable && !root.locked && !root.step.secret && root.step.needs-value: Field {
+                text <=> root.draft-value;
+                placeholder: root.step.value-label;
+                label: root.step.value-label + " of step " + root.step.index;
+                horizontal-stretch: 1;
+                min-width: 120px;
+                accepted(t) => { root.commit-value(root.step.index, t, root.draft-is-param, root.draft-param); }
+                focus-lost(t) => {
+                    if (t != root.step.value) { root.commit-value(root.step.index, t, root.draft-is-param, root.draft-param); }
+                }
+            }
+            if root.step.editable && !root.locked && !root.step.secret && root.step.needs-value: CheckBox {
+                text: "as parameter";
+                checked: root.draft-is-param;
+                accessible-label: "Make step " + root.step.index + " value a parameter";
+                toggled => {
+                    root.draft-is-param = self.checked;
+                    root.commit-value(root.step.index, root.draft-value, self.checked, root.draft-param);
+                }
+            }
+            if root.step.editable && !root.locked && !root.step.secret && root.step.needs-value && root.draft-is-param: Field {
+                text <=> root.draft-param;
+                placeholder: "PARAMETER";
+                label: "Parameter name of step " + root.step.index;
+                mono: true;
+                width: 130px;
+                accepted(t) => { root.commit-value(root.step.index, root.draft-value, true, t); }
+                focus-lost(t) => {
+                    if (t != root.step.param) { root.commit-value(root.step.index, root.draft-value, true, t); }
+                }
+            }
+            if !(root.step.editable && !root.locked && root.step.needs-value): Rectangle { horizontal-stretch: 1; }
+            if root.step.edited: Text { text: "edited"; color: Theme.danger; font-size: 10.5px; vertical-alignment: center; }
+            Btn {
+                compact: true;
+                has-icon: true;
+                icon: @image-url("icons/trash.svg");
+                tone: Theme.danger;
+                enabled: root.step.editable && !root.locked;
+                tip: "Delete step " + root.step.index;
+                clicked => { root.delete(root.step.index); }
+            }
+        }
+        HorizontalLayout {
+            padding-left: 48px;
+            spacing: 6px;
+            Text { text: "on"; color: Theme.text-dim; font-size: 11px; vertical-alignment: center; accessible-role: AccessibleRole.none; }
+            target := Text {
+                text: root.step.target;
+                color: Theme.text;
+                font-size: 12px;
+                font-weight: 600;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            if root.step.ways != "": Text { text: root.step.ways; color: Theme.text-dim; font-size: 10.5px; vertical-alignment: center; }
+            if root.step.scope != "": Text { text: root.step.scope; color: Theme.text-dim; font-size: 10.5px; vertical-alignment: center; overflow: elide; }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+    Tooltip { text: @markdown("\{root.step.ways-tip}"); }
+}
+
+export component StepEditor inherits Rectangle {
+    in property <[StepRow]> steps;
+    // While recording, each new step scrolls into view, so the newest one is
+    // always on screen. Scrolling up yourself stops it until the list is
+    // back at the bottom.
+    in property <bool> follow;
+    in property <[string]> action-labels;
+    in property <[string]> match-labels;
+    in property <bool> locked;
+    in property <InsertState> insert;
+    in property <bool> subflow-pick-open;
+    in property <int> subflow-pick-at;
+    in property <string> subflow-pick-position;
+    in property <[SubflowRow]> subflows;
+    in property <bool> subflow-mode;
+    in property <string> subflow-range;
+    in-out property <string> subflow-name;
+    in property <int> subflow-count;
+    // Drag state, owned here because it is pure presentation until dropped.
+    property <int> drag-from: -1;
+    property <int> drag-to: -1;
+    property <length> card-height: 70px;
+    // Whether the list is scrolled to its end; following only happens then.
+    property <bool> at-bottom: true;
+
+    callback select(int);
+    callback set-action(int, int);
+    callback commit-value(int, string, bool, string);
+    callback set-match(int, int);
+    callback delete(int);
+    callback reorder(int, int);
+    callback insert-at(int);
+    callback insert-action(int);
+    callback insert-label(string);
+    callback insert-value(string);
+    callback insert-param(string);
+    callback insert-match(int);
+    callback insert-add();
+    callback insert-capture();
+    callback insert-cancel();
+    callback capture-cancel();
+    callback pick-subflow(int);
+    callback subflow-insert(string);
+    callback subflow-delete(string);
+    callback subflow-pick-cancel();
+    callback toggle-subflow-mode();
+    callback toggle-subflow(int, bool);
+    callback subflow-name-edited(string);
+    callback subflow-save();
+    callback subflow-clear();
+
+    VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            Btn {
+                text: root.subflow-mode ? "Done selecting" : "Select steps for a subflow";
+                compact: true;
+                tone: Theme.text-dim;
+                enabled: !root.locked && root.steps.length > 0;
+                tip: "Tick consecutive steps and save them as a reusable subflow";
+                clicked => { root.toggle-subflow-mode(); }
+            }
+            if root.subflow-range != "": Text { text: root.subflow-range; color: Theme.accent; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+            if root.subflow-range != "": Field {
+                text <=> root.subflow-name;
+                placeholder: "Subflow name";
+                label: "Subflow name";
+                width: 160px;
+                edited(t) => { root.subflow-name-edited(t); }
+            }
+            if root.subflow-range != "": Btn {
+                text: "Save " + root.subflow-count + " steps";
+                compact: true;
+                primary: true;
+                tone: Theme.accent;
+                enabled: root.subflow-name != "" && !root.locked;
+                clicked => { root.subflow-save(); }
+            }
+            if root.subflow-range != "": Btn {
+                compact: true; has-icon: true; icon: @image-url("icons/close.svg");
+                tone: Theme.text-dim; tip: "Clear the selection";
+                clicked => { root.subflow-clear(); }
+            }
+        }
+        if root.steps.length == 0: VerticalLayout {
+            padding-top: 14px;
+            spacing: 4px;
+            Text { text: "No steps yet"; color: Theme.text-dim; font-size: 14px; horizontal-alignment: center; }
+            Text { text: "Press Start recording, drive the Edge window, then press Stop."; color: Theme.text-dim; font-size: 12px; horizontal-alignment: center; }
+        }
+        list := ScrollView {
+            vertical-stretch: 1;
+            accessible-role: AccessibleRole.list;
+            accessible-label: "Steps";
+            // The content height changes after the new row is laid out, so the
+            // scroll is tied to it rather than to the step count.
+            changed content-height => {
+                if (root.follow && root.at-bottom) {
+                    self.content-y = min(0px, self.visible-height - self.content-height);
+                }
+            }
+            scrolled => {
+                root.at-bottom = self.content-y <= self.visible-height - self.content-height + 40px;
+            }
+            VerticalLayout {
+                alignment: start;
+                spacing: 2px;
+                padding-right: 10px;
+                if root.insert.open && root.insert.at == 1: InsertForm {
+                    state: root.insert; action-labels: root.action-labels; match-labels: root.match-labels;
+                    set-action(i) => { root.insert-action(i); }
+                    set-label(t) => { root.insert-label(t); }
+                    set-value(t) => { root.insert-value(t); }
+                    set-param(t) => { root.insert-param(t); }
+                    set-match(m) => { root.insert-match(m); }
+                    add => { root.insert-add(); }
+                    capture => { root.insert-capture(); }
+                    cancel => { root.insert-cancel(); }
+                    cancel-capture => { root.capture-cancel(); }
+                }
+                if root.subflow-pick-open && root.subflow-pick-at == 1: SubflowPicker {
+                    position: root.subflow-pick-position; subflows: root.subflows;
+                    pick(id) => { root.subflow-insert(id); }
+                    delete(id) => { root.subflow-delete(id); }
+                    cancel => { root.subflow-pick-cancel(); }
+                }
+                if !(root.insert.open && root.insert.at == 1) && !(root.subflow-pick-open && root.subflow-pick-at == 1): InsertSlot {
+                    at: 1;
+                    position: "before the first step";
+                    has-subflows: root.subflows.length > 0;
+                    enabled: !root.locked;
+                    insert(at) => { root.insert-at(at); }
+                    pick-subflow(at) => { root.pick-subflow(at); }
+                }
+                for s[i] in root.steps: VerticalLayout {
+                    spacing: 2px;
+                    StepCard {
+                        step: s;
+                        action-labels: root.action-labels;
+                        match-labels: root.match-labels;
+                        locked: root.locked;
+                        subflow-mode: root.subflow-mode;
+                        drop-target: root.drag-from >= 0 && root.drag-to == s.index && root.drag-from != s.index;
+                        select(i) => { root.select(i); }
+                        set-action(i, a) => { root.set-action(i, a); }
+                        commit-value(i, v, p, n) => { root.commit-value(i, v, p, n); }
+                        set-match(i, m) => { root.set-match(i, m); }
+                        delete(i) => { root.delete(i); }
+                        toggle-subflow(i, on) => { root.toggle-subflow(i, on); }
+                        // One row of travel is the card plus the insert slot beneath it
+                        // and the spacing around both.
+                        drag-start(i) => { root.drag-from = i; root.drag-to = i; root.card-height = self.height + 22px + 3 * 2px; }
+                        drag-move(i, dy) => {
+                            root.drag-to = Math.max(1, Math.min(root.steps.length, i + Math.round(dy / root.card-height)));
+                        }
+                        drag-end(i) => {
+                            if (root.drag-from >= 1 && root.drag-to >= 1 && root.drag-from != root.drag-to) {
+                                root.reorder(root.drag-from, root.drag-to);
+                            }
+                            root.drag-from = -1;
+                            root.drag-to = -1;
+                        }
+                    }
+                    if root.insert.open && root.insert.at == s.index + 1: InsertForm {
+                        state: root.insert; action-labels: root.action-labels; match-labels: root.match-labels;
+                        set-action(i) => { root.insert-action(i); }
+                        set-label(t) => { root.insert-label(t); }
+                        set-value(t) => { root.insert-value(t); }
+                        set-param(t) => { root.insert-param(t); }
+                    set-match(m) => { root.insert-match(m); }
+                        add => { root.insert-add(); }
+                        capture => { root.insert-capture(); }
+                        cancel => { root.insert-cancel(); }
+                        cancel-capture => { root.capture-cancel(); }
+                    }
+                    if root.subflow-pick-open && root.subflow-pick-at == s.index + 1: SubflowPicker {
+                        position: root.subflow-pick-position; subflows: root.subflows;
+                        pick(id) => { root.subflow-insert(id); }
+                        delete(id) => { root.subflow-delete(id); }
+                        cancel => { root.subflow-pick-cancel(); }
+                    }
+                    if !(root.insert.open && root.insert.at == s.index + 1) && !(root.subflow-pick-open && root.subflow-pick-at == s.index + 1): InsertSlot {
+                        at: s.index + 1;
+                        position: "after step " + s.index;
+                        has-subflows: root.subflows.length > 0;
+                        enabled: !root.locked;
+                        insert(at) => { root.insert-at(at); }
+                        pick-subflow(at) => { root.pick-subflow(at); }
+                    }
+                }
+            }
+        }
+    }
+}

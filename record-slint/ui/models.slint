@@ -1,0 +1,141 @@
+// What the Rust side hands the UI. Every field is already formatted for display:
+// the UI decides layout and colour, never wording or business rules, so the
+// rules live in one place (src/present.rs) and are testable without a window.
+
+export struct FolderRow {
+    id: string,
+    name: string,
+    count: int,
+    depth: int,
+    system: bool,
+    expandable: bool,
+    expanded: bool,
+    selected: bool,
+    tip: string,
+    // Shown under the folder when expanded: the recordings it holds.
+    is-recording: bool,
+    // For a recording row inside a folder.
+    recording-id: string,
+    // "recording" | "replaying" | "" — drives the dot on a recording row.
+    live: string,
+    // Offer "file the open flow here": shown on a folder that is not the one
+    // the open flow already lives in, and only while a flow is open.
+    file-here: bool,
+    // A folder the user created, which may be renamed.
+    renamable: bool,
+    // May hold a sub-folder: a top-level folder the user created.
+    nestable: bool,
+    empty-marker: bool,
+}
+
+export struct ActionOption {
+    id: string,
+    label: string,
+}
+
+export struct StepRow {
+    index: int,
+    kind: string,
+    // Position of `kind` in the action list, for the dropdown.
+    action-index: int,
+    editable: bool,
+    needs-value: bool,
+    value-label: string,
+    value: string,
+    // A check: shown with its own mark, so a flow's claims stand out from
+    // its actions.
+    is-check: bool,
+    // A check that compares text, and how (index into match-labels).
+    matched: bool,
+    match-index: int,
+    is-param: bool,
+    param: string,
+    secret: bool,
+    secret-stored: bool,
+    phrase: string,
+    target: string,
+    ways: string,
+    ways-tip: string,
+    edited: bool,
+    // "passed" | "failed" | "running" | ""
+    status: string,
+    selected: bool,
+    in-subflow: bool,
+    scope: string,
+}
+
+export struct Line {
+    text: string,
+    // "text" | "dim" | "ok" | "danger" | "accent"
+    tone: string,
+    mono: bool,
+}
+
+export struct LocatorRow {
+    // 1-based position; the used rung is marked.
+    mark: string,
+    text: string,
+    used: bool,
+    // Editing.
+    strategy-index: int,
+    role: string,
+    name: string,
+    value: string,
+    is-role: bool,
+}
+
+export struct ParamRow {
+    name: string,
+    value: string,
+    recorded: string,
+}
+
+export struct RunRow {
+    id: string,
+    label: string,
+    // "passed" | "failed" | "cancelled" | other
+    status: string,
+    duration: string,
+    dataset: string,
+    failure: string,
+    selected: bool,
+}
+
+export struct RunStepRow {
+    index: int,
+    name: string,
+    status: string,
+    duration: string,
+    note: string,
+    note-is-fallback: bool,
+    uploaded: string,
+    error: string,
+    has-shot: bool,
+    shot: image,
+    shot-position: int,
+}
+
+export struct SubflowRow {
+    id: string,
+    label: string,
+}
+
+export struct InsertState {
+    open: bool,
+    at: int,
+    position: string,
+    action-index: int,
+    needs-target: bool,
+    needs-value: bool,
+    value-label: string,
+    // What the target field asks for: an element to act on, or to check.
+    target-label: string,
+    matched: bool,
+    match-index: int,
+    label: string,
+    value: string,
+    param: string,
+    recording: bool,
+    capturing: bool,
+    ready: bool,
+}
