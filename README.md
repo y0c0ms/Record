@@ -1,12 +1,10 @@
 # Record
 
-Record a flow in a real browser, edit it as a list of plain steps, and replay it.
-Record drives the Microsoft Edge you already have installed, through
-[Playwright](https://playwright.dev), and can export any flow as a Playwright test.
+Record browser flows in Microsoft Edge, edit them as plain steps, and replay them or export them as [Playwright](https://playwright.dev) tests.
 
 ![Record: the steps of a flow, with one step's locators open](docs/screenshot.png)
 
-## What it does
+## Features
 
 - **Record** what you do in Edge: clicks, typing, selects, key presses, file uploads,
   dialogs, and steps inside iframes and shadow DOM.
