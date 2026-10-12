@@ -805,6 +805,26 @@ export class Replayer {
         // A readonly input is the expected case for a date picker, so the
         // scripted path below is the real path, not an edge case.
       }
+      // The scripted path assumes a form control. A step that resolved to a
+      // button or a div — a click recorded as a fill, a target that was
+      // re-pointed at the wrong element — would otherwise throw a raw
+      // `Illegal invocation` from the native value setter. Say what the
+      // element is instead, so the step fails as a wrong target, not as a
+      // page error.
+      const kind = await handle.evaluate((node) =>
+        node.isContentEditable
+          ? 'contenteditable'
+          : node instanceof HTMLInputElement
+            ? `input type="${node.type}"`
+            : node instanceof HTMLTextAreaElement
+              ? 'textarea'
+              : node.tagName.toLowerCase()
+      );
+      if (kind !== 'contenteditable' && !kind.startsWith('input') && kind !== 'textarea') {
+        throw new Error(
+          `cannot type into a <${kind}>: the step's target is not a text field — re-point it at the input, or change the step to a click`
+        );
+      }
       await handle.evaluate(
         (node, text) => {
           const editable = node.isContentEditable;

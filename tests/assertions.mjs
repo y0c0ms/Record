@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createSession, sessionDir, GENERATED_DIR } from '../src/store.js';
-import { Recorder } from '../src/recorder.js';
+import { Recorder, stepView } from '../src/recorder.js';
 import { Replayer } from '../src/replayer.js';
 import { generateSpec } from '../src/codegen.js';
 import { assertionProblem } from '../src/assertions.js';
@@ -86,6 +86,20 @@ session.steps.splice(
   { type: 'assertHidden', locator: { strategy: 'css', value: '#spinner' }, candidates: [{ strategy: 'css', value: '#spinner' }], label: 'spinner' },
 );
 session.steps.forEach((s, n) => (s.index = n + 1));
+
+// The two checks added above carry a label but no stored title (the badge
+// records them without one). The view must still say what they check, not
+// `undefined`: the title is derived from the label, not read from the step.
+check(
+  'an inserted check has a title in its view',
+  stepView(session.steps.find((s) => s.type === 'assertHidden')).title === 'Check spinner is hidden',
+  stepView(session.steps.find((s) => s.type === 'assertHidden')).title
+);
+check(
+  'an inserted check has a title in its view (count)',
+  stepView(session.steps.find((s) => s.type === 'assertCount')).title === 'Check count of items',
+  stepView(session.steps.find((s) => s.type === 'assertCount')).title
+);
 
 // ---- replay as recorded: every check holds --------------------------------
 // The flow opens on its first navigate step, so that is where the page under

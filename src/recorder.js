@@ -486,13 +486,19 @@ export class Recorder {
 }
 
 export function stepView(step) {
+  // A step built outside the recorder — a check inserted by hand, a step a
+  // test composed directly — may have no title. The view derives one from the
+  // type and label then, rather than showing `undefined`. A stored title is
+  // kept as it is: older recordings carry a title but no separate label, and
+  // deriving it anew would replace their words with raw locator syntax.
+  const label = step.label || null;
   return {
     id: step.id,
     index: step.index,
     type: step.type,
-    title: step.title,
+    title: step.title || stepTitle({ ...step, label: label || describeLocator(step.locator) }),
     detail: step.detail,
-    label: step.label || null,
+    label,
     value: step.value,
     candidates: step.candidates || [],
     url: step.url,
